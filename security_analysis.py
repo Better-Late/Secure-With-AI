@@ -1,7 +1,7 @@
 from typing import Dict, Optional
 from diskcache import Cache
 from entity_resolution import SoftwareEntity, detect_entity
-from vunrabilites_search import search_vulnerabilities_structured, VulnerabilitySearchResult
+from search_vulnerabilities import search_vulnerabilities_structured, VulnerabilitySearchResult
 
 class AnalysisResult(Dict[str, any]):
     score: int
