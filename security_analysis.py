@@ -76,7 +76,7 @@ Please try again with corrected information or contact support for manual analys
 
     hash_info = f"\n**Hash:** `{hash_value}`" if hash_value else ""
 
-    vulnerabilities = search_vulnerabilities_structured(product_entity.vendor + ' ' + product_entity.full_name)
+    vulnerabilities = search_vulnerabilities_structured((product_entity.vendor or '') + ' ' + (product_entity.full_name or ''))
     vulnerability_section = create_vulnerability_section(vulnerabilities)
     
     alternatives = search_alternatives(product_entity.full_name)
@@ -85,7 +85,7 @@ Please try again with corrected information or contact support for manual analys
     result = {
         'score': 75,
         'summary': f"""
-### Security Analysis for: [{product_entity.full_name}]({product_entity.website}) - {product_entity.vendor}{hash_info}
+### Security Analysis for: [{product_entity.full_name}]({product_entity.website}) - {product_entity.vendor or ''}{hash_info}
 
 #### Overview
 {product_entity.description or "No description available."}

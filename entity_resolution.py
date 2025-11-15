@@ -34,8 +34,9 @@ def call_gemini_api(api_key, user_query):
         "You may call the provided Google Search tool to look up facts, but do NOT"
         " include raw HTML, full search snippets, or tool debugging info in your"
         " final answer. Instead, produce exactly one JSON object"
-        " containing the fields: full_name, vendor, website, github_link, description. If a"
-        " value is unknown, use null. Do not include explanatory text or markdown."
+        " containing the fields: full_name, vendor, website, github_link, description."
+        " If a value is unknown, use null. Use the process name as full name if full_name is unknown."
+        " Do not include explanatory text or markdown."
     )
     full_prompt = system_prompt + "\n\n" + user_query
 

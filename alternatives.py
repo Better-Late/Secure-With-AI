@@ -21,9 +21,13 @@ def search_alternatives(product: str) -> List[SoftwareEntity]:
     ]
     response = client.models.generate_content(
         model=model_id,
-        contents=f"List 5 popular alternatives to the software product '{product}'. Use https://european-alternatives.eu, https://alternativeto.net/, and https://www.opensourcealternative.to/ For each alternative, provide the full name, vendor, website, github link (if available), and a brief description. Instead, produce exactly one JSON object"
-        " containing the fields: full_name, vendor, website, github_link, description. Use google search if needed to find the details of the software product."
-        "  If a value is unknown, use null. Do not include explanatory text or markdown.",
+        contents=f"List 5 popular alternatives to the software product '{product}'." 
+        " Use https://european-alternatives.eu, https://alternativeto.net/, and https://www.opensourcealternative.to/."
+        " For each alternative, provide the full name, vendor, website, github link (if available), and a brief description. "
+        " Produce a JSON list with objects containing the fields: full_name, vendor, website, github_link, description. "
+        " Use google search if needed to find the details of the software product."
+        " Return only directly relevant alternatives."
+        " If some value is unknown, use null. Do not include explanatory text or markdown.",
         config=GenerateContentConfig(
             tools=tools,
         )
