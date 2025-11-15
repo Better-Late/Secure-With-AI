@@ -8,9 +8,12 @@ from popularity import getPopularity
 from score import getCveScore, getReputationScore
 from virustotal import get_parse_hashfile_assesment
 from virustotal import FileAssessment, get_parse_hashfile_assesment
+from gdpr import gdpr_search
+from html import unescape
+import re
+
 import os
 from dotenv import load_dotenv
-
 load_dotenv()
 
 class AnalysisResult(Dict[str, any]):
@@ -161,6 +164,12 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
             vulnerabilities=vulnerabilities,
             hash_value=hash_value
         )
+    
+
+
+
+    #GDPR
+    gdpr_section = create_gdpr_fines(product_entity.vendor)
 
     result = {
         'score': calculated_score,
@@ -188,6 +197,8 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
 {license_section}
 
 {vulnerability_section}
+
+{gdpr_section}
 
 {alternative_section}
 """
@@ -342,6 +353,70 @@ Please try again with corrected information or contact support for manual analys
         
     return result
 
+
+
+
+def create_gdpr_fines(company_name: str) -> str:
+    """
+    Create a markdown section summarizing GDPR fines against a company.
+    Uses the results returned by gdpr_search().
+    """
+
+
+    def clean_html(text: str) -> str:
+        """Remove embedded HTML tags and return readable text."""
+        if not isinstance(text, str):
+            return str(text)
+        text = unescape(text)
+        return re.sub(r'<[^>]+>', '', text).strip()
+
+    try:
+        df = gdpr_search(company_name)
+    except Exception as e:
+        return f"#### GDPR Fines\n\nCould not retrieve GDPR data: {e}"
+
+    if df is None or df.empty:
+        return "#### GDPR Fines\n\nNo GDPR enforcement actions found for this company."
+
+    required_columns = [
+        "ETid", "Country", "Date of Decision", "Fine [€]",
+        "Controller/Processor", "Quoted Art.", "Type", "Direct URL"
+    ]
+    for col in required_columns:
+        if col not in df.columns:
+            return f"#### GDPR Fines\n\nGDPR data missing required column: `{col}`."
+
+    md = "#### GDPR Enforcement Actions\n\n"
+    md += f"Found **{len(df)}** GDPR enforcement case(s) matching **{company_name}**.\n\n"
+
+    # Updated table header including Controller/Processor (company)
+    md += (
+        "| Date | Fine (€) | Company | Country | Type | Article | Case Link |\n"
+        "|------|----------|---------|---------|------|---------|-----------|\n"
+    )
+
+    for _, row in df.iterrows():
+        date = clean_html(row["Date of Decision"])
+        fine = clean_html(row["Fine [€]"])
+        controller = clean_html(row["Controller/Processor"])   # ← new column included
+        country = clean_html(row["Country"])
+        ptype = clean_html(row["Type"])
+        article = clean_html(row["Quoted Art."])
+        url = clean_html(row["Direct URL"])
+
+        # extract URLs
+        url_matches = re.findall(r"(https?://[^\s\"']+)", url)
+        url_final = url_matches[0] if url_matches else url
+
+        md += (
+            f"| {date} | {fine} | {controller} | {country} | "
+            f"{ptype} | {article} | [Link]({url_final}) |\n"
+        )
+
+    return md
+
+
+    
 
 def is_open_source(product_entity: SoftwareEntity) -> bool:
     """
