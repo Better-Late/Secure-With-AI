@@ -2,6 +2,7 @@ from typing import Dict, Optional
 from diskcache import Cache
 from entity_resolution import SoftwareEntity, detect_entity
 from search_vulnerabilities import search_vulnerabilities_structured, VulnerabilitySearchResult
+from alternatives import search_alternatives
 
 class AnalysisResult(Dict[str, any]):
     score: int
@@ -77,6 +78,9 @@ Please try again with corrected information or contact support for manual analys
 
     vulnerabilities = search_vulnerabilities_structured(product_entity.vendor + ' ' + product_entity.full_name)
     vulnerability_section = create_vulnerability_section(vulnerabilities)
+    
+    alternatives = search_alternatives(product_entity.full_name)
+    alternative_section = create_alternative_section(alternatives)
         
     result = {
         'score': 75,
@@ -100,6 +104,8 @@ Please try again with corrected information or contact support for manual analys
 Replace this mock function with your actual security analysis implementation.
 
 {vulnerability_section}
+
+{alternative_section}
 """
     }
     
@@ -141,3 +147,15 @@ def color_vulnerability_status(status: str) -> str:
         return ":gray[N/A]"
     else:
         return f':red[{status}]'
+    
+def create_alternative_section(alternatives: list[SoftwareEntity]) -> str:
+    """
+    Create a markdown section listing alternative software products.
+    """
+    if not alternatives:
+        return "No alternatives found."
+
+    md = "#### Alternative Software Products\n\n"
+    for alt in alternatives:
+        md += f"- [{alt.full_name}]({alt.website}) by {alt.vendor}\n  - Description: {alt.description or 'N/A'}\n\n"
+    return md

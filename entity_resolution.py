@@ -9,8 +9,8 @@ import sys
 
 class SoftwareEntity(BaseModel):
     full_name: str = Field(..., description="The official full name of the software application.")
-    vendor: str = Field(..., description="The official vendor or company name.")
-    website: str = Field(..., description="The primary official website URL of the application.")
+    vendor: str | None = Field(..., description="The official vendor or company name.")
+    website: str | None = Field(None, description="The primary official website URL of the application.")
     github_link: str | None = Field(None, description="The official GitHub repository link, if available.")
     description: str = Field(..., description="A brief description of what the software does and its primary purpose.")
 
