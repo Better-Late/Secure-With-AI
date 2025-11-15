@@ -33,7 +33,7 @@ columns = [
     "Direct URL (HTML)"
 ]
 
-df = pd.DataFrame(data, columns=columns)
+df_gdpr = pd.DataFrame(data, columns=columns)
 
 # ---------------------------------------------------------------
 # 3. CLEAN OPTIONAL (Remove HTML tags in Country + Source)
@@ -44,9 +44,9 @@ import re
 def strip_tags(text):
     return re.sub("<.*?>", "", str(text)).strip()
 
-df["Country"] = df["Country (HTML)"].apply(strip_tags)
-df["Source"] = df["Source (HTML)"].apply(strip_tags)
-df["Direct URL"] = df["Direct URL (HTML)"].apply(strip_tags)
+df_gdpr["Country"] = df_gdpr["Country (HTML)"].apply(strip_tags)
+df_gdpr["Source"] = df_gdpr["Source (HTML)"].apply(strip_tags)
+df_gdpr["Direct URL"] = df_gdpr["Direct URL (HTML)"].apply(strip_tags)
 
 # ---------------------------------------------------------------
 # 4. EXACT DATATABLES COLUMN SEARCH ON Controller/Processor
@@ -71,8 +71,8 @@ def datatables_smart_search(cell_value, search_term):
             return False
     return True
 
-def datatables_controller_search(df, term):
-    return df[df["Controller/Processor"].apply(
+def gdpr_search(term):
+    return df_gdpr[df_gdpr["Controller/Processor"].apply(
         lambda cell: datatables_smart_search(cell, term)
     )]
 
@@ -85,8 +85,7 @@ def datatables_controller_search(df, term):
 if __name__ == "__main__":
   term = input("Search Controller/Processor for: ").strip()
 
-  filtered = datatables_controller_search(df, term)
-  print(filtered)
+  filtered = gdpr_search(term)
   print(f"\nFound {len(filtered)} matching rows.\n")
 
 # SHOW SELECTED COLUMNS FOR READABILITY
