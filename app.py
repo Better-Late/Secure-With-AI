@@ -2,6 +2,7 @@ import streamlit as st
 from typing import Dict, Optional, List
 import csv
 import io
+from security_analysis import analysis
 
 # Initialize session state for storing search results
 if 'search_results' not in st.session_state:
@@ -12,44 +13,6 @@ if 'num_fields' not in st.session_state:
 
 if 'field_data' not in st.session_state:
     st.session_state.field_data = {}
-
-
-def mock_security_analysis(company_name: str, product_name: str) -> Dict[str, any]:
-    """
-    Placeholder function for security analysis.
-    Replace this with your actual security summary generation logic.
-    
-    Args:
-        company_name: Name of the company
-        product_name: Name of the program/product
-    
-    Returns:
-        Dict with 'score' (0-100) and 'summary' (markdown text)
-    """
-    # This is a mock implementation - replace with actual logic
-    return {
-        'score': 75,
-        'summary': f"""
-### Security Analysis for: {company_name} - {product_name}
-
-#### Overview
-This is a placeholder security summary for **{company_name}**'s **{product_name}** program.
-
-#### Key Findings
-- **Risk Level**: Medium
-- **Vulnerabilities Detected**: 2
-- **Compliance Status**: Partial
-
-#### Recommendations
-1. Update dependencies to latest versions
-2. Review access controls
-3. Implement additional encryption
-
-#### Details
-Replace this mock function with your actual security analysis implementation.
-"""
-    }
-
 
 def parse_csv(uploaded_file) -> List[Dict[str, str]]:
     """
@@ -105,7 +68,7 @@ def render_analyze_all_button():
                 product = st.session_state.get(f"product_{i}", "") or st.session_state.field_data.get(i, {}).get('product_name', '')
                 
                 if company.strip() or product.strip():
-                    result = mock_security_analysis(company, product)
+                    result = analysis(company, product)
                     st.session_state.search_results[i] = {
                         'company_name': company,
                         'product_name': product,
@@ -220,7 +183,7 @@ def render_search_field(i: int):
             print(f'Analysis started for: {company_name} - {product_name}')
             with st.spinner(f"Analyzing '{company_name} - {product_name}'..."):
                 # Call your security analysis function here
-                result = mock_security_analysis(company_name, product_name)
+                result = analysis(company_name, product_name)
                 st.session_state.search_results[i] = {
                     'company_name': company_name,
                     'product_name': product_name,
