@@ -71,56 +71,56 @@ def _parse_ai_response(response_text: str) -> AIAssessment:
     )
 
 
-def assess_license_with_ai(url: str, soup: BeautifulSoup, api_key: Optional[str] = None) -> AIAssessment:
-    """
-    Use Gemini AI to assess if a page contains license information.
+# def assess_license_with_ai(url: str, soup: BeautifulSoup, api_key: Optional[str] = None) -> AIAssessment:
+#     """
+#     Use Gemini AI to assess if a page contains license information.
     
-    Args:
-        url: The URL of the page
-        soup: BeautifulSoup object of the page
-        api_key: Gemini API key (defaults to GEMINI_API_KEY env variable)
+#     Args:
+#         url: The URL of the page
+#         soup: BeautifulSoup object of the page
+#         api_key: Gemini API key (defaults to GEMINI_API_KEY env variable)
     
-    Returns:
-        AIAssessment object with detection results
-    """
-    # try:
-    api_key = api_key or os.getenv('GEMINI_API_KEY')
-    if not api_key:
-        print("Warning: GEMINI_API_KEY not set, skipping AI assessment")
-        return AIAssessment(contains_license=False, license_type="unknown", confidence="low")
+#     Returns:
+#         AIAssessment object with detection results
+#     """
+#     # try:
+#     api_key = api_key or os.getenv('GEMINI_API_KEY')
+#     if not api_key:
+#         print("Warning: GEMINI_API_KEY not set, skipping AI assessment")
+#         return AIAssessment(contains_license=False, license_type="unknown", confidence="low")
     
-    # Create client
-    client = genai.Client(api_key=api_key)
+#     # Create client
+#     client = genai.Client(api_key=api_key)
     
-    # Extract page content
-    page_content = _extract_page_content(soup, url)
+#     # Extract page content
+#     page_content = _extract_page_content(soup, url)
     
-    # Load and format prompt
-    prompt_template = _load_license_prompt_template()
-    if not prompt_template:
-        return AIAssessment(contains_license=False, license_type="unknown", confidence="low")
+#     # Load and format prompt
+#     prompt_template = _load_license_prompt_template()
+#     if not prompt_template:
+#         return AIAssessment(contains_license=False, license_type="unknown", confidence="low")
     
-    prompt = prompt_template.format(
-        url=page_content.url,
-        title=page_content.title,
-        content=page_content.text
-    )
+#     prompt = prompt_template.format(
+#         url=page_content.url,
+#         title=page_content.title,
+#         content=page_content.text
+#     )
     
-    # Call Gemini API
-    response = client.models.generate_content(
-        model='gemini-2.0-flash-lite',
-        contents=prompt
-    )
+#     # Call Gemini API
+#     response = client.models.generate_content(
+#         model='gemini-2.0-flash-lite',
+#         contents=prompt
+#     )
     
-    print("got here")
-    # Parse response
-    assessment = _parse_ai_response(response.text.strip())
+#     print("got here")
+#     # Parse response
+#     assessment = _parse_ai_response(response.text.strip())
     
-    print(f"  AI Assessment: contains_license={assessment.contains_license}, "
-            f"confidence={assessment.confidence}, type={assessment.license_type}")
+#     print(f"  AI Assessment: contains_license={assessment.contains_license}, "
+#             f"confidence={assessment.confidence}, type={assessment.license_type}")
     
-    return assessment
+#     return assessment
         
-    # except Exception as e:
-    #     print(f"  Error in AI assessment: {e}")
-    #     return AIAssessment(contains_license=False, license_type="unknown", confidence="low")
+#     # except Exception as e:
+#     #     print(f"  Error in AI assessment: {e}")
+#     #     return AIAssessment(contains_license=False, license_type="unknown", confidence="low")

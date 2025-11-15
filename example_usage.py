@@ -11,9 +11,9 @@ print("Example 1: Open-source GitHub Project")
 print("=" * 60)
 
 github_repos = [
-    "https://github.com/pallets/flask",
-    "https://github.com/psf/requests",
-    "https://github.com/django/django",
+    # "https://github.com/pallets/flask",
+    # "https://github.com/psf/requests",
+    # "https://github.com/django/django",
 ]
 
 for repo_url in github_repos:
@@ -37,7 +37,7 @@ print("Note: Analyzes legal pages for software terms, privacy, and pricing!\n")
 websites = [
     # "https://www.jetbrains.com",
     # "https://www.adobe.com",
-    "https://www.slack.com",
+    "https://www.microsoft.com/en-us/microsoft-365/word",
 ]
 
 for website_url in websites:

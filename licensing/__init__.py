@@ -5,12 +5,13 @@ Licensing package for extracting license information from open-source and closed
 from .models import License, LicenseType, ProductInfo
 from .github import get_license_opensource
 from .crawler import get_license_closed_source
-from .proprietary_assessment import assess_proprietary_software
+from .proprietary_assessment import assess_proprietary_software, ProprietaryAssessment
 
 __all__ = [
     'License',
     'LicenseType',
     'ProductInfo',
+    'ProprietaryAssessment',
     'get_license_opensource',
     'get_license_closed_source',
     'assess_proprietary_software',
