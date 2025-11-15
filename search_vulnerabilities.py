@@ -1,7 +1,7 @@
 from google import genai
 from google.genai.types import Tool, GoogleSearch, GenerateContentConfig
 from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List, Literal, Optional, Union
 import os
 
 
@@ -22,21 +22,37 @@ class Vulnerability(BaseModel):
     source_url: Optional[str] = Field(
         default=None, description="URL of the source where this was found."
     )
-    severity: Optional[str] = Field(
+    severity: Optional[Union[float, Literal["Low", "Medium", "High", "Critical", "Unknown"]]] = Field(
         default=None, description="Severity rating if available (CVSS, vendor, etc.)."
     )
     published_date: Optional[str] = Field(
         default=None, description="Published date of the advisory, if available."
     )
-    status: Optional[str] = Field(
-        default=None, description= "Current status (In remedy/ Solved)"
-    )
+    status: Optional[Literal["Solved", "Not Solved", "Unknown Status"]] = None
 
 
 class VulnerabilitySearchResult(BaseModel):
     product_name: str = Field(description="The name of the product being analyzed.")
     results: List[Vulnerability]
 
+
+
+import requests
+def resolve_vertex_redirect(url: str, timeout: float = 5.0) -> str:
+    """
+    Try to resolve a vertexaisearch grounding-api-redirect URL
+    to its final destination by following HTTP redirects.
+    If anything fails, return the original URL.
+    """
+    if "vertexaisearch.cloud.google.com/grounding-api-redirect" not in url:
+        return url
+
+    try:
+        # HEAD is usually enough; use GET if the server doesn't support HEAD
+        resp = requests.get(url, allow_redirects=True, timeout=timeout)
+        return resp.url or url
+    except Exception:
+        return url
 
 
 import base64
@@ -53,7 +69,7 @@ def decode_vertex_ai_redirect(url: str) -> str:
     match = re.search(pattern, url)
 
     if not match:
-        return url  # Not a redirect link
+        return resolve_vertex_redirect(url)  # Not a redirect link
     encoded = match.group(1)
 
     # Convert to proper base64 padding
@@ -65,7 +81,7 @@ def decode_vertex_ai_redirect(url: str) -> str:
         decoded_str = decoded.decode("utf-8")
         return decoded_str
     except Exception:
-        return url  # Failed to decode → return original
+        return resolve_vertex_redirect(url)  # Failed to decode → return original
 
 
 
@@ -73,6 +89,8 @@ def decode_all_urls(findings: VulnerabilitySearchResult):
   for v in findings.results:
     if v.source_url:
         v.source_url = decode_vertex_ai_redirect(v.source_url)
+        if "vertexaisearch.cloud.google.com/grounding-api-redirect" in v.source_url: 
+          v.source_url = "Source Not Verfied"
   return findings
 # -----------------------------------------------------
 # Gemini Search Function
