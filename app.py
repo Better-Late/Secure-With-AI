@@ -17,8 +17,8 @@ if 'field_data' not in st.session_state:
 
 def parse_csv(uploaded_file) -> List[Dict[str, str]]:
     """
-    Parse CSV file and return list of entries with company_name and product_name.
-    Expected CSV format: company_name,product_name
+    Parse CSV file and return list of entries with company_name, product_name, and hash.
+    Expected CSV format: company_name,product_name,hash
     """
     entries = []
     try:
@@ -29,11 +29,13 @@ def parse_csv(uploaded_file) -> List[Dict[str, str]]:
             # Handle different possible column names
             company = row.get('company_name') or row.get('company') or row.get('Company Name') or row.get('Company') or ''
             product = row.get('product_name') or row.get('product') or row.get('Product Name') or row.get('Product') or ''
+            hash_value = row.get('hash') or row.get('Hash') or row.get('hash_value') or row.get('Hash Value') or ''
             
-            if company or product:  # Add if at least one field has data
+            if company or product or hash_value:  # Add if at least one field has data
                 entries.append({
                     'company_name': company.strip(),
-                    'product_name': product.strip()
+                    'product_name': product.strip(),
+                    'hash': hash_value.strip()
                 })
     except Exception as e:
         st.error(f"Error parsing CSV: {str(e)}")
@@ -65,29 +67,31 @@ def render_analyze_all_button():
             # Collect all fields that have data
             tasks_to_run = []
             for i in range(st.session_state.num_fields):
-                # Get company and product values from session state or field_data
+                # Get company, product, and hash values from session state or field_data
                 company = st.session_state.get(f"company_{i}", "") or st.session_state.field_data.get(i, {}).get('company_name', '')
                 product = st.session_state.get(f"product_{i}", "") or st.session_state.field_data.get(i, {}).get('product_name', '')
+                hash_value = st.session_state.get(f"hash_{i}", "") or st.session_state.field_data.get(i, {}).get('hash', '')
 
-                if company.strip() or product.strip():
-                    tasks_to_run.append((i, company, product))
+                if company.strip() or product.strip() or hash_value.strip():
+                    tasks_to_run.append((i, company, product, hash_value))
 
             # Run all analyses concurrently
             if tasks_to_run:
                 async def run_all_analyses():
-                    async def analyze_single(idx, comp, prod):
-                        result = await analysis(comp, prod)
-                        return (idx, comp, prod, result)
+                    async def analyze_single(idx, comp, prod, hash_val):
+                        result = await analysis(comp, prod, hash_val)
+                        return (idx, comp, prod, hash_val, result)
 
-                    return await asyncio.gather(*[analyze_single(i, c, p) for i, c, p in tasks_to_run])
+                    return await asyncio.gather(*[analyze_single(i, c, p, h) for i, c, p, h in tasks_to_run])
 
                 results = asyncio.run(run_all_analyses())
 
                 # Store all results
-                for idx, company, product, result in results:
+                for idx, company, product, hash_value, result in results:
                     st.session_state.search_results[idx] = {
                         'company_name': company,
                         'product_name': product,
+                        'hash': hash_value,
                         'result': result
                     }
             st.rerun()
@@ -103,9 +107,9 @@ def render_sidebar():
         # CSV Upload
         st.subheader("📁 Upload CSV")
         uploaded_file = st.file_uploader(
-            "Upload a CSV file with company and product data",
+            "Upload a CSV file with company, product, and hash data",
             type=['csv'],
-            help="CSV should have columns: company_name, product_name"
+            help="CSV should have columns: company_name, product_name, hash"
         )
         
         if uploaded_file is not None:
@@ -129,17 +133,18 @@ def render_sidebar():
         st.divider()
         st.markdown("""
         ### How to use
-        1. **Option A**: Enter company and product names manually
-        2. **Option B**: Upload a CSV file with columns: `company_name`, `product_name`
-        3. Click **Search All** to analyze all entries at once, or click individual Search buttons
+        1. **Option A**: Enter company, product names, and hash manually
+        2. **Option B**: Upload a CSV file with columns: `company_name`, `product_name`, `hash`
+        3. Click **Analyze All** to analyze all entries at once, or click individual Analyze buttons
         4. View the security score and summary
         5. Click the + button to add more fields
         """)
 
 
-def render_results(i: int, stored_company: str, stored_product: str, result: Dict):
+def render_results(i: int, stored_company: str, stored_product: str, stored_hash: str, result: Dict):
     """Render the results section for a search field."""
-    st.markdown(f"**Results for:** *{stored_company} - {stored_product}*")
+    hash_display = f" (Hash: {stored_hash})" if stored_hash else ""
+    st.markdown(f"**Results for:** *{stored_company} - {stored_product}{hash_display}*")
     
     # Display security score with colored indicator
     score = result['score']
@@ -171,8 +176,9 @@ def render_search_field(i: int):
         # Get pre-populated data if it exists
         company_default = st.session_state.field_data.get(i, {}).get('company_name', '')
         product_default = st.session_state.field_data.get(i, {}).get('product_name', '')
+        hash_default = st.session_state.field_data.get(i, {}).get('hash', '')
         
-        col1, col2, col3 = st.columns([2, 2, 1])
+        col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
         
         with col1:
             company_name = st.text_input(
@@ -191,18 +197,27 @@ def render_search_field(i: int):
             )
         
         with col3:
+            hash_value = st.text_input(
+                f"Hash {i+1}",
+                key=f"hash_{i}",
+                value=hash_default,
+                placeholder="Enter hash..."
+            )
+        
+        with col4:
             st.markdown("<br>", unsafe_allow_html=True)  # Align button with input
             analyze_clicked = st.button("🔍 Analyze", key=f"analyze_{i}")
         
         # Perform analysis when button is clicked
-        if analyze_clicked and (company_name.strip() or product_name.strip()):
-            print(f'Analysis started for: {company_name} - {product_name}')
+        if analyze_clicked and (company_name.strip() or product_name.strip() or hash_value.strip()):
+            print(f'Analysis started for: {company_name} - {product_name} - {hash_value}')
             with st.spinner(f"Analyzing '{company_name} - {product_name}'..."):
                 # Call your security analysis function here
-                result = asyncio.run(analysis(company_name, product_name))
+                result = asyncio.run(analysis(company_name, product_name, hash_value))
                 st.session_state.search_results[i] = {
                     'company_name': company_name,
                     'product_name': product_name,
+                    'hash': hash_value,
                     'result': result
                 }
         
@@ -210,8 +225,9 @@ def render_search_field(i: int):
         if i in st.session_state.search_results:
             stored_company = st.session_state.search_results[i]['company_name']
             stored_product = st.session_state.search_results[i]['product_name']
+            stored_hash = st.session_state.search_results[i].get('hash', '')
             result = st.session_state.search_results[i]['result']
-            render_results(i, stored_company, stored_product, result)
+            render_results(i, stored_company, stored_product, stored_hash, result)
 
 
 def render_search_fields():

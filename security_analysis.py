@@ -170,6 +170,8 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
 #### Overview
 {product_entity.description or "No description available."}
 
+**Type:** {product_entity.software_type or "N/A"}
+
 {vt_section}
 {malware_warning}
 
