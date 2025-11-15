@@ -88,7 +88,7 @@ def calculate_security_score(
 _cache = Cache('./cache_dir')
 
 
-def analysis(company_name: str, product_name: str, hash_value: Optional[str] = "bcd9fd198cab024450c1f2d09d83aeeeee6a2a4a") -> Dict[str, any]:
+def analysis(company_name: str, product_name: str, hash_value: Optional[str] = None) -> Dict[str, any]:
     """
     Placeholder function for security analysis.
     Replace this with your actual security summary generation logic.
