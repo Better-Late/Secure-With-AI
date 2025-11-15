@@ -1,31 +1,105 @@
-
 import requests
 import pandas as pd
 
+# ---------------------------------------------------------------
+# 1. DOWNLOAD THE FULL DATASET (same JSON loaded by the website)
+# ---------------------------------------------------------------
+
 URL = "https://www.enforcementtracker.com/data4sfk3j4hwe324kjhfdwe.json"
 
-# Load dataset
-data = requests.get(URL).json()["data"]
-df = pd.DataFrame(data)
-# print(df)
-# def datatables_column_search(df, column_name, search_value):
-#     """
-#     Exact DataTables-style column search:
-#     - case-insensitive
-#     - substring match
-#     - empty search_value returns all rows
-#     """
-#     search_value = str(search_value).lower().strip()
-#
-#     if search_value == "":
-#         return df  # same as DataTables: empty = no filter
-#
-#     return df[df[column_name].astype(str).str.lower().str.contains(search_value)]
-#
-#
-# # Example searches
-#
-# filtered = datatables_column_search(df, "Controller/Processor", "digi")
-# print(filtered)
-#
-#
+print("Downloading dataset...")
+response = requests.get(URL)
+data = response.json()["data"]
+
+print(f"Loaded {len(data)} entries.")
+
+# ---------------------------------------------------------------
+# 2. ASSIGN COLUMN NAMES
+# ---------------------------------------------------------------
+
+columns = [
+    "dtr_control",            # ignore
+    "ETid",
+    "Country (HTML)",
+    "Authority",
+    "Date of Decision",
+    "Fine [€]",
+    "Controller/Processor",
+    "Sector",
+    "Quoted Art.",
+    "Type",
+    "Summary",
+    "Source (HTML)",
+    "Direct URL (HTML)"
+]
+
+df = pd.DataFrame(data, columns=columns)
+
+# ---------------------------------------------------------------
+# 3. CLEAN OPTIONAL (Remove HTML tags in Country + Source)
+# ---------------------------------------------------------------
+
+import re
+
+def strip_tags(text):
+    return re.sub("<.*?>", "", str(text)).strip()
+
+df["Country"] = df["Country (HTML)"].apply(strip_tags)
+df["Source"] = df["Source (HTML)"].apply(strip_tags)
+df["Direct URL"] = df["Direct URL (HTML)"].apply(strip_tags)
+
+# ---------------------------------------------------------------
+# 4. EXACT DATATABLES COLUMN SEARCH ON Controller/Processor
+# ---------------------------------------------------------------
+
+import re
+
+def datatables_smart_search(cell_value, search_term):
+    """
+    Exact DataTables smart-matching behavior.
+    """
+    text = str(cell_value).lower()
+    s = str(search_term).lower().strip()
+
+    if s == "":
+        return True
+
+    tokens = re.split(r"\s+", s)
+
+    for token in tokens:
+        if token and token not in text:
+            return False
+    return True
+
+def datatables_controller_search(df, term):
+    return df[df["Controller/Processor"].apply(
+        lambda cell: datatables_smart_search(cell, term)
+    )]
+
+
+
+# ---------------------------------------------------------------
+# 5. ASK USER FOR SEARCH TERM
+# ---------------------------------------------------------------
+
+if __name__ == "__main__":
+  term = input("Search Controller/Processor for: ").strip()
+
+  filtered = datatables_controller_search(df, term)
+  print(filtered)
+  print(f"\nFound {len(filtered)} matching rows.\n")
+
+# SHOW SELECTED COLUMNS FOR READABILITY
+  print(filtered[[
+      "ETid",
+      "Country",
+      "Date of Decision",
+      "Fine [€]",
+      "Controller/Processor",
+      "Quoted Art.",
+      "Type",
+      "Direct URL"
+  ]].head(20).to_string(index=False))
+
+
+
