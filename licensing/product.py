@@ -3,7 +3,7 @@
 import os
 import re
 import json
-import requests
+import aiohttp
 from typing import Optional
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -51,13 +51,13 @@ Respond with a JSON object containing:
 """
 
 
-def extract_product_name(website_url: str) -> Optional[ProductInfo]:
+async def extract_product_name(website_url: str) -> Optional[ProductInfo]:
     """
     Extract product name from a website using AI.
-    
+
     Args:
         website_url: Website URL to analyze
-    
+
     Returns:
         ProductInfo object with product name and confidence, or None if extraction fails
     """
@@ -65,38 +65,40 @@ def extract_product_name(website_url: str) -> Optional[ProductInfo]:
         if not is_available():
             print("Warning: GEMINI_API_KEY not set, cannot extract product name")
             return None
-        
+
         # Fetch the website
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-        response = requests.get(website_url, headers=headers, timeout=10)
-        response.raise_for_status()
-        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(website_url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                response.raise_for_status()
+                html = await response.text()
+
         # Parse content
-        soup = BeautifulSoup(response.text, 'html.parser')
+        soup = BeautifulSoup(html, 'html.parser')
         page_content = _extract_page_content(soup, website_url, max_chars=2000)
-        
+
         # Create prompt and call Gemini
         prompt = _create_product_name_prompt(page_content)
-        response_text = generate_content(prompt)
-        
+        response_text = await generate_content(prompt)
+
         if not response_text:
             print("Failed to get product name from AI")
             return None
-        
+
         # Parse response
         response_text = re.sub(r'```json\s*|\s*```', '', response_text).strip()
         result = json.loads(response_text)
-        
+
         product_info = ProductInfo(
             name=result.get('product_name', 'Unknown'),
             confidence=result.get('confidence', 'low')
         )
-        
+
         print(f"Extracted product name: '{product_info.name}' (confidence: {product_info.confidence})")
         return product_info
-        
+
     except Exception as e:
         print(f"Error extracting product name: {e}")
         return None

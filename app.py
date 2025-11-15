@@ -2,6 +2,7 @@ import streamlit as st
 from typing import Dict, Optional, List
 import csv
 import io
+import asyncio
 from security_analysis import analysis
 
 # Initialize session state for storing search results
@@ -61,21 +62,36 @@ def render_analyze_all_button():
     col_left, col_center, col_right = st.columns([2, 1, 2])
     with col_center:
         if st.button("🔍 Analyze All", use_container_width=True, type="primary"):
-            # Trigger search for all fields that have data
+            # Collect all fields that have data
+            tasks_to_run = []
             for i in range(st.session_state.num_fields):
                 # Get company and product values from session state or field_data
                 company = st.session_state.get(f"company_{i}", "") or st.session_state.field_data.get(i, {}).get('company_name', '')
                 product = st.session_state.get(f"product_{i}", "") or st.session_state.field_data.get(i, {}).get('product_name', '')
-                
+
                 if company.strip() or product.strip():
-                    result = analysis(company, product)
-                    st.session_state.search_results[i] = {
+                    tasks_to_run.append((i, company, product))
+
+            # Run all analyses concurrently
+            if tasks_to_run:
+                async def run_all_analyses():
+                    async def analyze_single(idx, comp, prod):
+                        result = await analysis(comp, prod)
+                        return (idx, comp, prod, result)
+
+                    return await asyncio.gather(*[analyze_single(i, c, p) for i, c, p in tasks_to_run])
+
+                results = asyncio.run(run_all_analyses())
+
+                # Store all results
+                for idx, company, product, result in results:
+                    st.session_state.search_results[idx] = {
                         'company_name': company,
                         'product_name': product,
                         'result': result
                     }
             st.rerun()
-    
+
     st.markdown("---")  # Compact separator
 
 
@@ -183,7 +199,7 @@ def render_search_field(i: int):
             print(f'Analysis started for: {company_name} - {product_name}')
             with st.spinner(f"Analyzing '{company_name} - {product_name}'..."):
                 # Call your security analysis function here
-                result = analysis(company_name, product_name)
+                result = asyncio.run(analysis(company_name, product_name))
                 st.session_state.search_results[i] = {
                     'company_name': company_name,
                     'product_name': product_name,
