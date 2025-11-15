@@ -7,12 +7,17 @@ import re
 import argparse
 import sys
 
+class MalwareSuspicion(BaseModel):
+    flagged: bool = Field(..., description="Indicates if the software is flagged as suspicious or potentially malicious.")
+    reasons: list[str] = Field(..., description="List of reasons why the software is considered suspicious.")
+
 class SoftwareEntity(BaseModel):
     full_name: str = Field(..., description="The official full name of the software application.")
-    vendor: str = Field(..., description="The official vendor or company name.")
-    website: str = Field(..., description="The primary official website URL of the application.")
+    vendor: str | None = Field(..., description="The official vendor or company name.")
+    website: str | None = Field(None, description="The primary official website URL of the application.")
     github_link: str | None = Field(None, description="The official GitHub repository link, if available.")
     description: str = Field(..., description="A brief description of what the software does and its primary purpose.")
+    malware_suspicion: MalwareSuspicion | None = Field(None, description="Indicates if the software is flagged as suspicious or potentially malicious, with reasons.")
 
 
 def get_gemini_api_key():
@@ -28,14 +33,18 @@ def get_gemini_api_key():
         sys.exit(1)
     return api_key
 
-def call_gemini_api(api_key, user_query):
+def call_gemini_api(api_key, user_query) -> tuple[SoftwareEntity | None, ]:
     system_prompt = (
         "You are a software information retrieval assistant. "
         "You may call the provided Google Search tool to look up facts, but do NOT"
         " include raw HTML, full search snippets, or tool debugging info in your"
         " final answer. Instead, produce exactly one JSON object"
-        " containing the fields: full_name, vendor, website, github_link, description. If a"
-        " value is unknown, use null. Do not include explanatory text or markdown."
+        " containing the fields: full_name, vendor, website, github_link, description."
+        " If a value is unknown, use null. Use the process name as full name if full_name is unknown."
+        " Do not include explanatory text or markdown."
+        " In addition, if you find clear indications that the software is very suspicious or a malware,"
+        " include a field 'malware_suspicion' with subfields 'flagged' (boolean) and 'reasons' (list of strings) explaining why." \
+        " Use this field only if the program is a known malware, not when it is just insecure."
     )
     full_prompt = system_prompt + "\n\n" + user_query
 
