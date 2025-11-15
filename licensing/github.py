@@ -88,11 +88,12 @@ def get_license_opensource(github_url: str) -> Optional[License]:
         # Use GitHub API for license detection
         license_text, found_filename, license_type = _fetch_github_license_api(owner, repo)
         
-        if license_text and license_type:
+        # Return license if we got text, even if type is UNKNOWN
+        if license_text:
             license_url = f"{github_url.rstrip('/')}/blob/main/{found_filename}" if found_filename else github_url
             
             return License(
-                ltype=license_type,
+                ltype=license_type or LicenseType.UNKNOWN,
                 text=license_text,
                 url=license_url
             )

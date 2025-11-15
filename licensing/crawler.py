@@ -8,7 +8,7 @@ from urllib.parse import urljoin, urlparse
 from collections import deque
 
 from .models import License, LicenseType, CrawlState
-from .proprietary_assessment import assess_proprietary_software
+from .proprietary_assessment import assess_proprietary_software, ProprietaryAssessment
 from .utils import detect_license_type
 
 
@@ -38,15 +38,13 @@ def get_license_closed_source(
         assessment = assess_proprietary_software(website_url)
         
         if assessment:
-            terms, privacy, is_free = assessment
-            
             return License(
                 ltype=LicenseType.PROPRIETARY,
                 text="Proprietary software - see terms of use",
                 url=website_url,
-                terms_of_use=terms,
-                privacy_assessment=privacy,
-                is_free=is_free
+                terms_of_use=assessment.terms_of_use,
+                privacy_assessment=assessment.privacy_assessment,
+                is_free=assessment.is_free
             )
         
         print("Failed to extract proprietary software information.")

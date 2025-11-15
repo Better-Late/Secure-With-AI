@@ -21,10 +21,11 @@ class ProprietaryAssessment:
     """Assessment of proprietary software terms and privacy."""
     terms_of_use: str
     privacy_assessment: str
+    is_free: str
 
 
 def _get_footer_legal_patterns() -> List[str]:
-    """Get regex patterns for legal/privacy links in footer."""
+    """Get regex patterns for legal/privacy links."""
     return [
         r'privacy\s*(and\s*security|notice|policy)?',
         r'terms\s*(of\s*(use|service))?',
@@ -34,8 +35,20 @@ def _get_footer_legal_patterns() -> List[str]:
         r'data\s*protection',
         r'cookie\s*policy',
         r'acceptable\s*use',
-        r'terms',
-        r'privacy'
+    ]
+
+
+def _get_pricing_patterns() -> List[str]:
+    """Get regex patterns for pricing/plans links."""
+    return [
+        r'pric(e|ing)',
+        r'plan(s)?',
+        r'subscription(s)?',
+        r'buy',
+        r'purchase',
+        r'cost',
+        r'free\s*trial',
+        r'upgrade',
     ]
 
 
@@ -212,47 +225,80 @@ def _normalize_domain(url: str) -> str:
     return domain
 
 
-def _find_footer_legal_links(soup: BeautifulSoup, base_url: str) -> List[str]:
+def _resolve_redirect(url: str) -> str:
     """
-    Find legal/privacy related links anywhere on the page.
+    Resolve URL redirects to get final destination.
+    
+    Args:
+        url: URL that may redirect
+    
+    Returns:
+        Final URL after following redirects
+    """
+    try:
+        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+        response = requests.head(url, headers=headers, allow_redirects=True, timeout=5)
+        return response.url
+    except:
+        return url
+
+
+def _find_links_by_patterns(soup: BeautifulSoup, base_url: str, patterns: List[str], link_type: str, max_links: int = 10) -> List[str]:
+    """
+    Find links matching given patterns on the page.
     
     Args:
         soup: BeautifulSoup object of the page
         base_url: Base URL for resolving relative links
+        patterns: List of regex patterns to match
+        link_type: Description of link type (for logging)
+        max_links: Maximum number of links to collect (default: 10)
     
     Returns:
-        List of URLs for legal/privacy pages
+        List of URLs matching the patterns (up to max_links)
     """
     from urllib.parse import urljoin
     
-    patterns = _get_footer_legal_patterns()
-    legal_links = []
+    found_links = []
     seen_urls = set()
-    base_domain = _normalize_domain(base_url)
     
-    # Search all links on the page (including deeply nested ones)
     for link in soup.find_all('a', href=True):
+        if len(found_links) >= max_links:
+            break
+            
         link_text = link.get_text().lower().strip()
         link_href = link['href'].lower()
         
-        # Check if link matches any legal pattern
-        is_legal_link = any(
+        is_matching_link = any(
             re.search(pattern, link_text) or re.search(pattern, link_href)
             for pattern in patterns
         )
         
-        if is_legal_link:
+        if is_matching_link:
             full_url = urljoin(base_url, link['href'])
-            link_domain = _normalize_domain(full_url)
+                
+            # Resolve redirects
+            # resolved_url = _resolve_redirect(full_url)
+            resolved_url = full_url # ignore redirects for now
             
-            # Only include same-domain links and avoid duplicates
-            if link_domain == base_domain:
-                if full_url not in seen_urls:
-                    seen_urls.add(full_url)
-                    legal_links.append(full_url)
-                    print(f"  Found legal link: {link_text} -> {full_url}")
+            if resolved_url not in seen_urls:
+                seen_urls.add(resolved_url)
+                found_links.append(resolved_url)
+                print(f"  Found {link_type} link: {link_text} -> {resolved_url}")
     
-    return legal_links
+    return found_links
+
+
+def _find_legal_links(soup: BeautifulSoup, base_url: str) -> List[str]:
+    """Find legal/privacy related links on the page."""
+    patterns = _get_footer_legal_patterns()
+    return _find_links_by_patterns(soup, base_url, patterns, "legal")
+
+
+def _find_pricing_links(soup: BeautifulSoup, base_url: str) -> List[str]:
+    """Find pricing/plans related links on the page."""
+    patterns = _get_pricing_patterns()
+    return _find_links_by_patterns(soup, base_url, patterns, "pricing")
 
 
 def _fetch_page_text(url: str) -> Optional[str]:
@@ -269,21 +315,21 @@ def _fetch_page_text(url: str) -> Optional[str]:
     
     if soup:
         text = _clean_text_content(soup)
-        return text[:10000]  # Limit to 10k chars
+        return text  # Limit to 10k chars
     
     return None
 
 
 def _collect_legal_texts(legal_urls: List[str]) -> str:
     """
-    Fetch, summarize, and combine text from all legal pages.
-    Only includes software-relevant information.
+    Fetch, summarize, and combine text from legal pages.
+    Focuses on software-relevant privacy and terms information.
     
     Args:
         legal_urls: List of URLs to legal/privacy pages
     
     Returns:
-        Combined summarized text from all pages (software-relevant only)
+        Combined summarized text from legal pages
     """
     all_summaries = []
     
@@ -292,31 +338,67 @@ def _collect_legal_texts(legal_urls: List[str]) -> str:
         text = _fetch_page_text(url)
         
         if text:
-            # Summarize each page to ~1000 chars, filtering for software-relevant content
-            print(f"    Analyzing page for software-relevant terms...")
+            print(f"    Analyzing for software privacy/terms...")
             summary = summarize_legal_text(text, page_url=url, max_chars=1000)
             
-            if summary and summary.strip():  # Only include non-empty summaries
+            if summary and summary.strip():
                 all_summaries.append(f"=== From {url} ===\n{summary}\n")
-                print(f"    ✓ Found software-relevant terms")
+                print(f"    ✓ Found relevant terms")
             else:
-                print(f"    ✗ No software-relevant terms found (skipping)")
+                print(f"    ✗ No relevant terms (skipping)")
     
     if not all_summaries:
-        print("  Warning: No software-relevant terms found in any legal pages")
+        print("  Warning: No software-relevant legal terms found")
     
     return "\n\n".join(all_summaries)
 
 
-def _create_proprietary_assessment_prompt(legal_text: str) -> str:
-    """Create prompt for AI assessment of proprietary software terms."""
-    return f"""You are a legal expert analyzing software terms of use and privacy policies.
+def _collect_pricing_texts(pricing_urls: List[str]) -> str:
+    """
+    Fetch, summarize, and combine text from pricing pages.
+    
+    Args:
+        pricing_urls: List of URLs to pricing/plans pages
+    
+    Returns:
+        Combined summarized text from pricing pages
+    """
+    all_summaries = []
+    
+    for url in pricing_urls:
+        print(f"  Fetching pricing page: {url}")
+        text = _fetch_page_text(url)
+        
+        if text:
+            print(f"    Analyzing for pricing information...")
+            # Summarize with focus on pricing
+            summary = summarize_legal_text(text, page_url=url, max_chars=800)
+            
+            if summary and summary.strip():
+                all_summaries.append(f"=== From {url} ===\n{summary}\n")
+                print(f"    ✓ Found pricing info")
+            else:
+                print(f"    ✗ No pricing info (skipping)")
+    
+    if not all_summaries:
+        print("  Warning: No pricing information found")
+    
+    return "\n\n".join(all_summaries)
 
-Analyze the following legal documents and provide a clear assessment.
 
-## Legal Documents
+def _create_proprietary_assessment_prompt(legal_text: str, pricing_text: str) -> str:
+    """Create prompt for AI assessment using legal and pricing context."""
+    return f"""You are a legal expert analyzing software terms, privacy policies, and pricing.
 
-{legal_text[:15000]}
+Analyze the following documents:
+
+## Legal/Terms Documents
+
+{legal_text[:8000] if legal_text else "No legal documents available"}
+
+## Pricing/Plans Documents
+
+{pricing_text[:7000] if pricing_text else "No pricing documents available"}
 
 ## Your Task
 
@@ -324,9 +406,9 @@ Provide a JSON response with three assessments:
 
 ```json
 {{{{
-  "terms_of_use": "In ONE paragraph, summarize the key conditions for using this software. Include: usage restrictions, licensing limitations, user obligations, and any notable prohibitions. FOCUS ON SOFTWARE, NOT THE WEBSITE.",
-  "privacy_assessment": "In ONE paragraph, assess privacy implications. Address: what data is collected, how it's used, if it's shared with third parties, data retention, and any privacy concerns users should know about. FOCUS ON SOFTWARE.",
-  "is_free": "In ONE paragraph, clearly state if the software is free to use or requires payment. Include: free tier availability, trial periods, pricing model (subscription/one-time/freemium), any usage limits on free tier, and conditions for free use. If pricing is unclear, state 'Pricing information not found in legal documents'."
+  "terms_of_use": "In ONE paragraph, summarize key conditions for using this software. Use BOTH legal and pricing documents. Include: usage restrictions, licensing limitations, user obligations, prohibitions. FOCUS ON SOFTWARE, NOT THE WEBSITE.",
+  "privacy_assessment": "In ONE paragraph, assess privacy implications using ONLY the Legal/Terms documents. Address: data collected, how it's used, third-party sharing, data retention, privacy concerns. FOCUS ON SOFTWARE.",
+  "is_free": "In ONE paragraph, state if software is free or paid using ONLY the Pricing/Plans documents. Include: free tier, trial periods, pricing model (subscription/one-time/freemium), usage limits, conditions for free use. If unclear, state 'Pricing information not found'."
 }}}}
 ```
 
@@ -334,41 +416,40 @@ Provide a JSON response with three assessments:
 
 - Keep each paragraph concise (3-5 sentences)
 - Focus on USER-RELEVANT information
-- Highlight any RED FLAGS or concerning terms
-- If information is missing, state "Information not provided"
+- Highlight RED FLAGS or concerning terms
+- If information missing, state "Information not provided"
 - Be objective and factual
 """
 
 
-def _parse_proprietary_assessment(response_text: str) -> Tuple[str, str, str]:
+def _parse_proprietary_assessment(response_text: str) -> ProprietaryAssessment:
     """
-    Parse AI response into terms, privacy, and pricing assessment.
+    Parse AI response into ProprietaryAssessment.
     
     Args:
         response_text: AI response text
     
     Returns:
-        Tuple of (terms_of_use, privacy_assessment, is_free)
+        ProprietaryAssessment dataclass
     """
-    # Remove markdown code blocks
     response_text = re.sub(r'```json\s*|\s*```', '', response_text).strip()
     
     try:
         result = json.loads(response_text)
-        return (
-            result.get('terms_of_use', 'Assessment not available'),
-            result.get('privacy_assessment', 'Assessment not available'),
-            result.get('is_free', 'Pricing information not available')
+        return ProprietaryAssessment(
+            terms_of_use=result.get('terms_of_use', 'Assessment not available'),
+            privacy_assessment=result.get('privacy_assessment', 'Assessment not available'),
+            is_free=result.get('is_free', 'Pricing information not available')
         )
     except json.JSONDecodeError:
-        return (
-            'Failed to parse assessment',
-            'Failed to parse assessment',
-            'Failed to parse assessment'
+        return ProprietaryAssessment(
+            terms_of_use='Failed to parse assessment',
+            privacy_assessment='Failed to parse assessment',
+            is_free='Failed to parse assessment'
         )
 
 
-def assess_proprietary_software(website_url: str) -> Optional[Tuple[str, str, str]]:
+def assess_proprietary_software(website_url: str) -> Optional[ProprietaryAssessment]:
     """
     Assess proprietary software terms of use, privacy, and pricing.
     
@@ -376,7 +457,7 @@ def assess_proprietary_software(website_url: str) -> Optional[Tuple[str, str, st
         website_url: Website URL to assess
     
     Returns:
-        Tuple of (terms_of_use, privacy_assessment, is_free) or None if assessment fails
+        ProprietaryAssessment or None if assessment fails
     """
     try:
         if not is_available():
@@ -385,32 +466,34 @@ def assess_proprietary_software(website_url: str) -> Optional[Tuple[str, str, st
         
         print(f"Assessing proprietary software at {website_url}...")
         
-        # Step 1: Fetch main page with JavaScript support
+        # Step 1: Fetch main page
         soup = _fetch_page_with_js(website_url)
         
         if not soup:
             print("  Failed to fetch website")
             return None
         
-        # Step 2: Find legal/privacy links
-        legal_urls = _find_footer_legal_links(soup, website_url)
+        # Step 2: Find legal and pricing links
+        legal_urls = _find_legal_links(soup, website_url)
+        pricing_urls = _find_pricing_links(soup, website_url)
         
-        if not legal_urls:
-            print("  No legal/privacy links found on page")
+        if not legal_urls and not pricing_urls:
+            print("  No legal or pricing links found")
             return None
         
-        print(f"  Found {len(legal_urls)} legal pages")
+        print(f"  Found {len(legal_urls)} legal pages and {len(pricing_urls)} pricing pages")
         
-        # Step 3: Collect text from legal pages
-        legal_text = _collect_legal_texts(legal_urls)
+        # Step 3: Collect texts separately
+        legal_text = _collect_legal_texts(legal_urls) if legal_urls else ""
+        pricing_text = _collect_pricing_texts(pricing_urls) if pricing_urls else ""
         
-        if not legal_text or len(legal_text) < 200:
-            print("  Insufficient legal text found")
+        if not legal_text and not pricing_text:
+            print("  Insufficient content found")
             return None
         
-        # Step 4: Use AI to assess terms and privacy
-        print("  Analyzing terms and privacy with AI...")
-        prompt = _create_proprietary_assessment_prompt(legal_text)
+        # Step 4: Use AI to assess with both contexts
+        print("  Analyzing with AI...")
+        prompt = _create_proprietary_assessment_prompt(legal_text, pricing_text)
         response_text = generate_content(prompt)
         
         if not response_text:
@@ -418,10 +501,10 @@ def assess_proprietary_software(website_url: str) -> Optional[Tuple[str, str, st
             return None
         
         # Step 5: Parse response
-        terms, privacy, is_free = _parse_proprietary_assessment(response_text)
+        assessment = _parse_proprietary_assessment(response_text)
         
         print("  ✓ Proprietary assessment complete")
-        return terms, privacy, is_free
+        return assessment
         
     except Exception as e:
         print(f"Error in proprietary assessment: {e}")
