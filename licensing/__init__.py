@@ -5,7 +5,7 @@ Licensing package for extracting license information from open-source and closed
 from .models import License, LicenseType, ProductInfo
 from .github import get_license_opensource
 from .crawler import get_license_closed_source
-from .product import extract_product_name
+from .proprietary_assessment import assess_proprietary_software
 
 __all__ = [
     'License',
@@ -13,5 +13,5 @@ __all__ = [
     'ProductInfo',
     'get_license_opensource',
     'get_license_closed_source',
-    'extract_product_name',
+    'assess_proprietary_software',
 ]

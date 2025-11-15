@@ -6,11 +6,11 @@ import json
 import requests
 from typing import Optional
 from bs4 import BeautifulSoup
-import google.genai as genai
 from dotenv import load_dotenv
 
 from .models import ProductInfo, PageContent
 from .ai_assessment import _extract_page_content
+from .gemini_client import generate_content, is_available
 
 load_dotenv()
 
@@ -62,8 +62,7 @@ def extract_product_name(website_url: str) -> Optional[ProductInfo]:
         ProductInfo object with product name and confidence, or None if extraction fails
     """
     try:
-        api_key = os.getenv('GEMINI_API_KEY')
-        if not api_key:
+        if not is_available():
             print("Warning: GEMINI_API_KEY not set, cannot extract product name")
             return None
         
@@ -78,18 +77,15 @@ def extract_product_name(website_url: str) -> Optional[ProductInfo]:
         soup = BeautifulSoup(response.text, 'html.parser')
         page_content = _extract_page_content(soup, website_url, max_chars=2000)
         
-        # Create client and prompt
-        client = genai.Client(api_key=api_key)
+        # Create prompt and call Gemini
         prompt = _create_product_name_prompt(page_content)
+        response_text = generate_content(prompt)
         
-        # Call Gemini API
-        response = client.models.generate_content(
-            model='gemini-2.0-flash-lite',
-            contents=prompt
-        )
+        if not response_text:
+            print("Failed to get product name from AI")
+            return None
         
         # Parse response
-        response_text = response.text.strip()
         response_text = re.sub(r'```json\s*|\s*```', '', response_text).strip()
         result = json.loads(response_text)
         

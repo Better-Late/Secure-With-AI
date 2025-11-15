@@ -6,14 +6,12 @@ import json
 import requests
 from typing import List, Optional
 from bs4 import BeautifulSoup
-import google.genai as genai
-from google.genai import types
 from dotenv import load_dotenv
 
 from .models import License, LicenseType
-from .ai_assessment import assess_license_with_ai
 from .page_extraction import _extract_license_from_current_page, _clean_text_content
 from .utils import is_same_domain, detect_license_type
+from .gemini_client import generate_content_with_search, is_available
 
 load_dotenv()
 
@@ -54,13 +52,9 @@ def perform_google_search(query: str, num_results: int = 3) -> List[str]:
         List of URLs from search results
     """
     try:
-        api_key = os.getenv('GEMINI_API_KEY')
-        if not api_key:
+        if not is_available():
             print("Warning: GEMINI_API_KEY not set, cannot perform search")
             return []
-        
-        # Create client
-        client = genai.Client(api_key=api_key)
         
         # Create prompt asking for search results with URLs
         search_prompt = f"""Search for: "{query}"
@@ -73,17 +67,12 @@ Return ONLY a JSON array of URLs, nothing else. Format:
 Only include actual webpage URLs, skip any PDF files or non-webpage results."""
         
         # Call Gemini with Google Search grounding
-        response = client.models.generate_content(
-            model='gemini-2.0-flash-lite',
-            contents=search_prompt,
-            config=types.GenerateContentConfig(
-                tools=[types.Tool(google_search=types.GoogleSearch())],
-            )
-        )
+        response_text = generate_content_with_search(search_prompt)
+        
+        if not response_text:
+            return []
         
         # Parse response to extract URLs
-        response_text = response.text.strip()
-        
         # Remove markdown code blocks if present
         response_text = re.sub(r'```json\s*|\s*```', '', response_text).strip()
         

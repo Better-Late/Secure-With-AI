@@ -7,7 +7,6 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 
 from .models import LicenseSearchResult
-from .ai_assessment import assess_license_with_ai
 from .utils import get_license_patterns
 
 
@@ -55,7 +54,7 @@ def _is_valid_license_link(link_url: str, base_url: str) -> bool:
 
 
 def _fetch_and_verify_license_page(url: str, headers: dict) -> LicenseSearchResult:
-    """Fetch a potential license page and verify it contains license info."""
+    """Fetch a potential license page and extract content."""
     try:
         print(f"  Following license link: {url}")
         response = requests.get(url, headers=headers, timeout=10)
@@ -65,13 +64,7 @@ def _fetch_and_verify_license_page(url: str, headers: dict) -> LicenseSearchResu
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
-        # Use AI to verify this is a license page
-        assessment = assess_license_with_ai(url, soup)
-        
-        if not assessment.contains_license or assessment.confidence == 'low':
-            return LicenseSearchResult(found=False)
-        
-        # Extract license text
+        # Extract license text directly without AI assessment
         text = _clean_text_content(soup)
         
         if text and len(text) > 100:
@@ -146,31 +139,20 @@ def extract_license_from_page(url: str, soup: BeautifulSoup, headers: dict, use_
         url: The URL of the page being processed
         soup: BeautifulSoup object of the page
         headers: HTTP headers to use for requests
-        use_ai: Whether to use AI assessment (default: True)
+        use_ai: Deprecated parameter, kept for backwards compatibility
     
     Returns:
         LicenseSearchResult with found status and license info
     """
-    # Step 1: Use AI to assess if this page contains license information
-    if use_ai:
-        assessment = assess_license_with_ai(url, soup)
-        
-        if not assessment.contains_license or assessment.confidence == 'low':
-            print(f"  AI determined page does not contain license information")
-            # Still check for license links to follow
-            return _search_license_links(url, soup, headers)
-        
-        print(f"  AI confirmed license content present (type: {assessment.license_type})")
-    
-    # Step 2: Extract the license content from this page
+    # Step 1: Extract the license content from this page
     result = _extract_license_from_current_page(soup, url)
     if result.found:
         return result
     
-    # Step 3: Search for license links
+    # Step 2: Search for license links
     result = _search_license_links(url, soup, headers)
     if result.found:
         return result
     
-    # Step 4: Check footer and copyright as last resort
+    # Step 3: Check footer and copyright as last resort
     return _search_footer_and_copyright(soup, url)

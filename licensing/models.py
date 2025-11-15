@@ -28,6 +28,10 @@ class License:
     ltype: LicenseType
     text: str
     url: str
+    # Fields for proprietary software assessment
+    terms_of_use: Optional[str] = None
+    privacy_assessment: Optional[str] = None
+    is_free: Optional[str] = None
 
 
 @dataclass

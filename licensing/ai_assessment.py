@@ -1,4 +1,8 @@
-"""AI-powered license assessment functionality."""
+"""AI-powered license assessment functionality.
+
+DEPRECATED: This module is no longer used in the main license extraction flow.
+Kept for backwards compatibility only.
+"""
 
 import os
 import re
