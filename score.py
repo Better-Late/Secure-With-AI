@@ -78,7 +78,7 @@ def getCveScore(cves: VulnerabilitySearchResult) -> float:
 
     # Map unbounded total_risk -> [0, 100] safety score using a saturating function
     # K controls how quickly the score drops. Tune as needed.
-    K = 20.0  # "moderate" total risk level -> about 50 safety
+    K = 30.0  # "moderate" total risk level -> about 50 safety
     if total_risk <= 0:
         return 100.0
 

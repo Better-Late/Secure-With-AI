@@ -4,9 +4,79 @@ from entity_resolution import SoftwareEntity, detect_entity
 from search_vulnerabilities import search_vulnerabilities_structured, VulnerabilitySearchResult
 from alternatives import search_alternatives
 from licensing import License, LicenseType, get_license_opensource, get_license_closed_source
+from popularity import getPopularity
+from score import getCveScore, getReputationScore
+from virustotal import get_parse_hashfile_assesment
 
 class AnalysisResult(Dict[str, any]):
     score: int
+
+
+def calculate_security_score(
+    product_name: str,
+    vulnerabilities: Optional[VulnerabilitySearchResult] = None,
+    hash_value: Optional[str] = None
+) -> float:
+    """
+    Calculate overall security score based on:
+    - Popularity score (0-100)
+    - CVE score from vulnerabilities (0-100)
+    - VirusTotal assessment (if hash provided)
+    
+    Args:
+        product_name: Name of the product for popularity lookup
+        vulnerabilities: Vulnerability search results
+        hash_value: Optional hash for VirusTotal analysis
+    
+    Returns:
+        Overall security score (0-100)
+    """
+    # Get popularity score
+    try:
+        popularity_score = getPopularity(product_name)
+    except Exception as e:
+        print(f"Warning: Could not get popularity score: {e}")
+        popularity_score = 50.0  # Default to medium popularity
+    
+    # Get CVE score from vulnerabilities
+    if vulnerabilities:
+        cve_score = getCveScore(vulnerabilities)
+    else:
+        cve_score = 100.0  # No vulnerabilities = perfect score
+    
+    print(f"Popularity Score: {popularity_score}, CVE Score: {cve_score}")
+
+    # Calculate reputation score (combines popularity and CVE)
+    reputation_score = getReputationScore(popularity_score, cve_score)
+    
+    # If hash is provided, factor in VirusTotal results
+    if hash_value:
+        try:
+            vt_assessment = get_parse_hashfile_assesment(hash_value)
+            
+            # Calculate VirusTotal score based on detection ratio
+            total_scans = (vt_assessment.detection.malicious + 
+                          vt_assessment.detection.suspicious + 
+                          vt_assessment.detection.undetected + 
+                          vt_assessment.detection.harmless)
+            
+            if total_scans > 0:
+                malicious_ratio = (vt_assessment.detection.malicious + 
+                                  vt_assessment.detection.suspicious) / total_scans
+                vt_score = (1 - malicious_ratio) * 100  # Invert so higher is better
+            else:
+                vt_score = 50.0  # Unknown
+            
+            # Combine scores: 50% reputation, 50% VirusTotal
+            final_score = (reputation_score * 0.5) + (vt_score * 0.5)
+        except Exception as e:
+            print(f"Warning: Could not get VirusTotal assessment: {e}")
+            final_score = reputation_score
+    else:
+        # No hash provided, use reputation score only
+        final_score = reputation_score
+    
+    return round(max(0.0, min(100.0, final_score)), 2)
 
 
 # Global cache instance using diskcache
@@ -52,6 +122,9 @@ def analysis(company_name: str, product_name: str, hash_value: Optional[str] = N
         vulnerability_section = ""
         alternative_section = ""
         license_section = ""
+        vulnerabilities = None
+        # Low score for flagged malware
+        calculated_score = 10.0
     else:
         malware_warning = ""
         vulnerabilities = search_vulnerabilities_structured((product_entity.vendor or '') + ' ' + (product_entity.full_name or ''))
@@ -65,9 +138,16 @@ def analysis(company_name: str, product_name: str, hash_value: Optional[str] = N
         else:
             license_info = get_license_closed_source(product_entity.website, product_entity.full_name)
         license_section = create_license_section(license_info)
+        
+        # Calculate security score
+        calculated_score = calculate_security_score(
+            product_name=product_entity.full_name,
+            vulnerabilities=vulnerabilities,
+            hash_value=hash_value
+        )
 
     result = {
-        'score': 75,
+        'score': calculated_score,
         'summary': f"""
 ### Security Analysis for: [{product_entity.full_name}]({product_entity.website}) - {product_entity.vendor or ''}{hash_info}
 
