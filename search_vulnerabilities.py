@@ -54,7 +54,6 @@ def decode_vertex_ai_redirect(url: str) -> str:
 
     if not match:
         return url  # Not a redirect link
-    print("Match found")
     encoded = match.group(1)
 
     # Convert to proper base64 padding
@@ -64,7 +63,6 @@ def decode_vertex_ai_redirect(url: str) -> str:
     try:
         decoded = base64.urlsafe_b64decode(encoded.encode("utf-8"))
         decoded_str = decoded.decode("utf-8")
-        print("Match found")
         return decoded_str
     except Exception:
         return url  # Failed to decode → return original
