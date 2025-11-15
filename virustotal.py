@@ -262,6 +262,7 @@ def get_parse_hashfile_assesment(shash: str) -> FileAssessment:
 
 if __name__ == "__main__":
     shash = "37121618e735ebf628f7ba6ce29afc251ed88503"
+    print(getInfoFromHash(shash).text)
 
     findings = get_parse_hashfile_assesment(shash)
 

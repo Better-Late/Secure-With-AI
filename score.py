@@ -43,21 +43,21 @@ def extract_cvss(severity_str: Optional[str | float]) -> Optional[float]:
 
 def getCveScore(cves: VulnerabilitySearchResult) -> float:
     """
-    Compute a CVE safety score in the range 0–30.
+    Compute a CVE safety score in the range 0–100.
+    Higher = safer.
 
     Logic:
       - Each CVE contributes risk based on severity (CVSS preferred).
       - Unpatched CVEs add extra penalty.
       - Score decreases with more and more severe CVEs.
-      - No CVEs → full 30 points.
+      - No CVEs → 100 (best score).
     """
 
     vulns = cves.results
     if not vulns or len(vulns) == 0:
-        return 30.0  # No vulnerabilities → best score
+        return 100.0  # No vulnerabilities → best score
 
     total_risk = 0.0
-
 
     for v in vulns:
         cvss = extract_cvss(v.severity)
@@ -76,12 +76,18 @@ def getCveScore(cves: VulnerabilitySearchResult) -> float:
 
         total_risk += risk
 
-    # Normalize: larger total risk → lower score
-    # Assuming ~15 risk points is "moderate", scale accordingly.
-    score = 30 - (total_risk * 1.5)
+    # Map unbounded total_risk -> [0, 100] safety score using a saturating function
+    # K controls how quickly the score drops. Tune as needed.
+    K = 30.0  # "moderate" total risk level -> about 50 safety
+    if total_risk <= 0:
+        return 100.0
 
-    # Clamp between 0 and 30
-    return max(0.0, min(30.0, score)) * 100/30 # because ai,we revert back to the 100 scale
+    risk_factor = total_risk / (total_risk + K)  # in (0,1)
+    safety_score = (1.0 - risk_factor) * 100.0  # 0–100, higher is safer
+
+    # Clamp & round for safety
+    safety_score = max(0.0, min(100.0, safety_score))
+    return safety_score
 
 
 
@@ -108,8 +114,7 @@ def getReputationScore(
 
 
 
-
-def combine_scores(reputationScore, cve_score):
+def combine_scores(reputationScore, cve_score): # add other scores
   return 0.7*cve_score + 0.3*reputationScore #adjust weights
 
 
