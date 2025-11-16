@@ -1,24 +1,24 @@
-# 🔒 Secure with AI
+# Secure with AI
 
 Comprehensive security analysis platform powered by artificial intelligence that helps you evaluate the security and trustworthiness of software products.
 
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.51.0+-red.svg)](https://streamlit.io)
 
-## 🌟 Features
+## Features
 
-- **🔍 Multi-Factor Security Analysis**: Combines multiple data sources to provide a comprehensive security score (0-100)
-- **🛡️ CVE Vulnerability Detection**: Automatically searches for and analyzes known vulnerabilities
-- **🦠 VirusTotal Integration**: Checks file hashes against 90+ antivirus engines
-- **📊 Popularity Scoring**: Uses Google Trends to gauge community interest and adoption
-- **⚖️ License Detection**: Identifies open-source and proprietary licenses with compliance information
-- **🏛️ GDPR Compliance Tracking**: Checks for GDPR enforcement actions and fines
-- **💥 Data Breach History**: Searches historical breach database for security incidents
-- **🔄 Alternative Suggestions**: Recommends similar software products
-- **📁 Batch Analysis**: CSV upload support for analyzing multiple products at once
-- **💾 Smart Caching**: Results are cached to improve performance on repeated queries
+- **Multi-Factor Security Analysis**: Combines multiple data sources to provide a comprehensive security score (0-100)
+- **CVE Vulnerability Detection**: Automatically searches for and analyzes known vulnerabilities
+- **VirusTotal Integration**: Checks file hashes against 90+ antivirus engines
+- **Popularity Scoring**: Uses Google Trends to gauge community interest and adoption
+- **License Detection**: Identifies open-source and proprietary licenses with compliance information
+- **GDPR Compliance Tracking**: Checks for GDPR enforcement actions and fines
+- **Data Breach History**: Searches historical breach database for security incidents
+- **Alternative Suggestions**: Recommends similar software products
+- **Batch Analysis**: CSV upload support for analyzing multiple products at once
+- **Smart Caching**: Results are cached to improve performance on repeated queries
 
-## 📸 Screenshots
+## Screenshots
 
 The application provides an intuitive web interface for security analysis with:
 - Real-time security scoring with color-coded indicators
@@ -26,7 +26,7 @@ The application provides an intuitive web interface for security analysis with:
 - Interactive expandable summaries
 - Batch processing capabilities
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -63,7 +63,7 @@ The application provides an intuitive web interface for security analysis with:
    
    Open your browser and navigate to `http://localhost:8501`
 
-## 🎯 Usage
+## Usage
 
 ### Single Product Analysis
 
@@ -104,7 +104,7 @@ The **Trust Score** (0-100) is calculated based on:
 
 Click the **Score Details** button in the UI for the full mathematical breakdown.
 
-## 🏗️ Architecture
+## Architecture
 
 ### Core Components
 
@@ -138,7 +138,7 @@ User Input → Entity Resolution → Parallel Analysis:
                                   Report Generation
 ```
 
-## 🐳 Docker Deployment
+## Docker Deployment
 
 Build and run with Docker:
 
@@ -147,7 +147,7 @@ docker build -t secure-with-ai .
 docker run -p 8501:8501 --env-file .env secure-with-ai
 ```
 
-## 📊 Data Sources
+## Data Sources
 
 - **CVE Database**: National Vulnerability Database (NVD)
 - **VirusTotal**: 90+ antivirus engine results
@@ -157,7 +157,7 @@ docker run -p 8501:8501 --env-file .env secure-with-ai
 - **GitHub**: Open-source license information
 - **AI Analysis**: Google Gemini for intelligent license assessment
 
-## 🧪 Testing
+## Testing
 
 Run the test suite:
 
@@ -165,11 +165,7 @@ Run the test suite:
 pytest tests/
 ```
 
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -179,21 +175,17 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
-## ⚠️ Disclaimer
+## Disclaimer
 
 This tool provides automated security analysis based on publicly available data. Results should be used as part of a comprehensive security assessment and not as the sole basis for security decisions. Always verify critical findings manually.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - Built for hackathon participation
 - Powered by Google Gemini AI
 - Integrates VirusTotal API
 - Uses Streamlit for the web interface
 
-## 📧 Contact
-
-Project Link: [https://github.com/Better-Late/Secure-With-AI](https://github.com/Better-Late/Secure-With-AI)
-
 ---
 
-**Made with no sleep by the Better-late-than-never team**
+Made with no sleep by the Better-late-than-never team
