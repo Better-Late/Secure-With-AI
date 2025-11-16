@@ -112,9 +112,11 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
     if cached_result:
         return cached_result
 
+    print("detecting entity...")
     # Perform actual analysis
     product_entity = detect_entity(f"{company_name} {product_name}")
 
+    print("detected entiy:", product_entity)
     # Handle case when entity detection fails
     if product_entity is None:
         result = render_analysis_not_found(company_name, product_name, hash_value)
@@ -124,6 +126,7 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
     hash_info = f"\n**Hash:** `{hash_value}`" if hash_value else ""
 
     vt_section = ""
+    license_info = None
     if product_entity.malware_suspicion and product_entity.malware_suspicion.flagged:
         malware_warning = f"\n\n**⚠️ Malware Suspicion:** This software has been flagged as potentially malicious for the following reasons:\n"
         for reason in product_entity.malware_suspicion.reasons:
@@ -146,7 +149,9 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
             # No hash provided
             vt_section = create_virustotal_section(None)
 
+        print("searching vulnerabilities...")
         vulnerabilities = search_vulnerabilities_structured((product_entity.vendor or '') + ' ' + (product_entity.full_name or ''))
+        print("found vulnerabilities:", vulnerabilities)
         vulnerability_section = create_vulnerability_section(vulnerabilities)
 
         alternatives = search_alternatives(product_entity.full_name)
@@ -157,7 +162,7 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
         else:
             license_info = await get_license_closed_source(product_entity.website, product_entity.full_name)
         license_section = create_license_section(license_info)
-        
+
         # Calculate security score
         calculated_score = calculate_security_score(
             product_name=product_entity.full_name,
@@ -173,6 +178,7 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
 
     result = {
         'score': calculated_score,
+        'license': license_info,
         'summary': f"""
 ### Security Analysis for: [{product_entity.full_name}]({product_entity.website}) - {product_entity.vendor or ''}{hash_info}
 
@@ -209,11 +215,11 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
     return result
 
 
-def create_vulnerability_section(vulnerabilities: VulnerabilitySearchResult) -> str:
+def create_vulnerability_section(vulnerabilities: Optional[VulnerabilitySearchResult]) -> str:
     """
     Create a markdown section summarizing vulnerabilities.
     """
-    if not vulnerabilities.results:
+    if not vulnerabilities or not vulnerabilities.results:
         return "No known vulnerabilities found."
 
     md = "#### Vulnerabilities Detected\n\n"
@@ -324,6 +330,7 @@ def render_analysis_not_found(company_name: str, product_name: str, hash_value: 
     
     result = {
         'score': 0,
+        'license': None,
         'summary': f"""
 ### Security Analysis for: {company_name} - {product_name}{hash_info}
 
@@ -433,9 +440,27 @@ def create_license_section(license: Optional[License]) -> str:
     """
     if not license:
         return "No license information found."
-  
+
     md = "#### License Information\n\n"
     md += f"- **License Type:** {license.ltype}\n"
     md += f"- **License URL:** {license.url}\n"
     md += f"- **Is Free Software:** {license.is_free or 'N/A'}\n"
+
+    # Add sources section if available
+    if license.legal_sources or license.pricing_sources:
+        md += "\n<details>\n<summary><b>📄 View Sources</b></summary>\n\n\n"
+
+        if license.legal_sources:
+            md += "**Legal/Terms Sources:**\n"
+            for source in license.legal_sources:
+                md += f"- [{source}]({source})\n"
+            md += "\n"
+
+        if license.pricing_sources:
+            md += "**Pricing Sources:**\n"
+            for source in license.pricing_sources:
+                md += f"- [{source}]({source})\n"
+
+        md += "</details>\n"
+
     return md
