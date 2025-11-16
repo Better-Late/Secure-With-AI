@@ -11,6 +11,7 @@ from virustotal import FileAssessment, get_parse_hashfile_assesment
 from gdpr import gdpr_search
 from html import unescape
 import re
+import pandas as pd
 
 import os
 from dotenv import load_dotenv
@@ -136,9 +137,12 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
         return result
 
     hash_info = f"\n**Hash:** `{hash_value}`" if hash_value else ""
-    
+
     #GDPR
     gdpr_section, isFined = create_gdpr_fines(product_entity.vendor)
+
+    # Data Breaches
+    breach_section, hasBreaches = create_data_breach_section(product_entity.vendor)
 
     vt_section = ""
     license_info = None
@@ -153,6 +157,7 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
         # Low score for flagged malware
         calculated_score = 10.0
         calculated_score_breakdown = {}
+        # Note: breach_section and gdpr_section are already set above
     else:
         malware_warning = ""
         if hash_value and hash_value.strip():
@@ -240,6 +245,8 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
 {vulnerability_section}
 
 {gdpr_section}
+
+{breach_section}
 
 {alternative_section}
 """
@@ -535,7 +542,57 @@ def create_gdpr_fines(company_name: str):
     return md, True
 
 
-    
+def create_data_breach_section(company_name: str):
+    """
+    Create a markdown section summarizing known data breaches for a company.
+    Searches the breaches.csv file for matching entities.
+
+    Args:
+        company_name: Name of the company/brand to search for
+
+    Returns:
+        tuple: (markdown_string, has_breaches_bool)
+    """
+    try:
+        # Read the CSV file
+        df = pd.read_csv('breaches.csv')
+    except FileNotFoundError:
+        return "#### Data Breaches\n\nCould not find breaches.csv file.", False
+    except Exception as e:
+        return f"#### Data Breaches\n\nError reading breach data: {e}", False
+
+    if df.empty:
+        return "#### Data Breaches\n\nNo breach data available.", False
+
+    # Search for company name in the breach database
+    # Match against the 'name' column (domain names)
+    company_lower = company_name.lower()
+
+    # Filter rows where the company name appears in the domain name
+    matches = df[df['name'].str.lower().str.contains(company_lower, na=False, regex=False)]
+
+    if matches.empty:
+        return f"#### Data Breaches\n\nNo known data breaches found for **{company_name}**.", False
+
+    # Build markdown table
+    md = "#### Data Breaches\n\n"
+    md += f"Found **{len(matches)}** known data breach(es) associated with **{company_name}**.\n\n"
+    md += "| Entity Name | Date | Breach Link |\n"
+    md += "|-------------|------|-------------|\n"
+
+    for _, row in matches.iterrows():
+        entity_name = row['name']
+        year = row['year']
+        month = row['month'].capitalize() if pd.notna(row['month']) else 'Unknown'
+        date_str = f"{month} {year}"
+        url = row['url']
+
+        md += f"| {entity_name} | {date_str} | [Link]({url}) |\n"
+
+    return md, True
+
+
+
 
 def is_open_source(product_entity: SoftwareEntity) -> bool:
     """
