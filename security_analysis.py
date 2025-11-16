@@ -133,6 +133,7 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
     # Perform actual analysis
     product_entity = await detect_entity(f"{company_name} {product_name}")
 
+
     print("detected entiy:", product_entity)
     # Handle case when entity detection fails
     if product_entity is None:
@@ -141,14 +142,6 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
         return result
 
     hash_info = f"\n**Hash:** `{hash_value}`" if hash_value else ""
-
-    # Run GDPR and Data Breach checks in parallel
-    gdpr_task = create_gdpr_fines(product_entity.vendor)
-    breach_task = create_data_breach_section(product_entity.vendor)
-
-    (gdpr_section, isFined), (breach_section, hasBreaches) = await asyncio.gather(
-        gdpr_task, breach_task
-    )
 
     vt_section = ""
     license_info = None
@@ -161,15 +154,24 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
         license_section = ""
         vulnerabilities = None
         # Low score for flagged malware
-        calculated_score = 10.0
+        calculated_score = 0.0
         calculated_score_breakdown = {}
-        # Note: breach_section and gdpr_section are already set above
+        # Skip GDPR and breach checks for malware
+        gdpr_section = ""
+        breach_section = ""
+        isFined = False
     else:
         malware_warning = ""
 
         # Prepare all async tasks
         tasks = []
         task_names = []
+
+        # GDPR and Data Breach checks
+        tasks.append(create_gdpr_fines(product_entity.vendor))
+        task_names.append('gdpr')
+        tasks.append(create_data_breach_section(product_entity.vendor))
+        task_names.append('breach')
 
         # VirusTotal task (if hash provided)
         if hash_value and hash_value.strip():
@@ -205,6 +207,25 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
 
         # Process results
         result_dict = dict(zip(task_names, results))
+
+        # Process GDPR result
+        if 'gdpr' in result_dict:
+            gdpr_result = result_dict['gdpr']
+            if isinstance(gdpr_result, Exception):
+                print(f"Warning: Error getting GDPR data: {gdpr_result}")
+                gdpr_section = "#### GDPR Fines\n\nCould not retrieve GDPR data."
+                isFined = False
+            else:
+                gdpr_section, isFined = gdpr_result
+
+        # Process breach result
+        if 'breach' in result_dict:
+            breach_result = result_dict['breach']
+            if isinstance(breach_result, Exception):
+                print(f"Warning: Error getting breach data: {breach_result}")
+                breach_section = "#### Data Breaches\n\nCould not retrieve breach data."
+            else:
+                breach_section, _ = breach_result
 
         # Process VirusTotal result
         if 'vt' in result_dict:

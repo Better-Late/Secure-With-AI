@@ -11,6 +11,10 @@ class MalwareSuspicion(BaseModel):
     flagged: bool = Field(..., description="Indicates if the software is flagged as suspicious or potentially malicious.")
     reasons: list[str] = Field(..., description="List of reasons why the software is considered suspicious.")
 
+class MalwareCheckResponse(BaseModel):
+    is_malware: bool = Field(..., description="Whether the software is confirmed malware based on multiple explicit sources.")
+    explanation: str = Field(..., description="Detailed explanation of why the software is or isn't considered malware.")
+
 class SoftwareEntity(BaseModel):
     full_name: str = Field(..., description="The official full name of the software application.")
     vendor: str | None = Field(..., description="The official vendor or company name.")
@@ -80,15 +84,108 @@ async def call_gemini_api(api_key, user_query) -> tuple[SoftwareEntity | None, ]
         try:
             parsed = json.loads(response_text)
         except json.JSONDecodeError:
-            m = re.search(r"(\{(?:[^{}]|(?R))*\})", response_text, re.S)
-            if not m:
+            # Try to extract JSON object from text by finding balanced braces
+            start = response_text.find('{')
+            if start == -1:
                 print("Error: Response did not contain valid JSON. Raw response:")
                 print(response_text)
                 return None
-            parsed = json.loads(m.group(1))
+
+            # Find matching closing brace
+            brace_count = 0
+            end = -1
+            for i in range(start, len(response_text)):
+                if response_text[i] == '{':
+                    brace_count += 1
+                elif response_text[i] == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        end = i + 1
+                        break
+
+            if end == -1:
+                print("Error: Response did not contain valid JSON. Raw response:")
+                print(response_text)
+                return None
+
+            parsed = json.loads(response_text[start:end])
 
         entity = SoftwareEntity.model_validate(parsed)
-        entity.malware_suspicion = None
+
+        # Perform malware detection check
+        malware_check_prompt = (
+            f"Is '{entity.full_name}' malware or malicious software? "
+            "Be reasonably conservative in your assessment - only flag as malware if you find "
+            "MULTIPLE EXPLICIT mentions from reliable sources stating that this software is malicious, "
+            "a virus, trojan, spyware, or known malware. Do not flag software that is merely insecure, "
+            "deprecated, or has vulnerabilities. Provide a detailed explanation of your findings. "
+            "Return your response as a JSON object with exactly two fields: "
+            "'is_malware' (boolean) and 'explanation' (string). Do not include any other text."
+        )
+
+        try:
+            malware_config = GenerateContentConfig(
+                tools=[search_tool],
+                response_mime_type="text/plain",
+            )
+
+            malware_response = await loop.run_in_executor(
+                None,
+                lambda: client.models.generate_content(
+                    model="gemini-2.5-flash",
+                    contents=malware_check_prompt,
+                    config=malware_config
+                )
+            )
+
+            malware_text = getattr(malware_response, "text", None) or str(malware_response)
+
+            # Extract JSON from response (handle markdown code blocks)
+            if "```json" in malware_text:
+                m = re.search(r"```json(.*?)```", malware_text, re.S)
+                if m:
+                    malware_text = m.group(1).strip()
+
+            try:
+                malware_result = json.loads(malware_text)
+            except json.JSONDecodeError:
+                # Try to extract JSON object from text by finding balanced braces
+                start = malware_text.find('{')
+                if start == -1:
+                    raise ValueError("No valid JSON found in malware check response")
+
+                # Find matching closing brace
+                brace_count = 0
+                end = -1
+                for i in range(start, len(malware_text)):
+                    if malware_text[i] == '{':
+                        brace_count += 1
+                    elif malware_text[i] == '}':
+                        brace_count -= 1
+                        if brace_count == 0:
+                            end = i + 1
+                            break
+
+                if end == -1:
+                    raise ValueError("No valid JSON found in malware check response")
+
+                malware_result = json.loads(malware_text[start:end])
+
+            malware_check = MalwareCheckResponse.model_validate(malware_result)
+
+            # Set malware_suspicion if flagged as malware
+            if malware_check.is_malware:
+                entity.malware_suspicion = MalwareSuspicion(
+                    flagged=True,
+                    reasons=[malware_check.explanation]
+                )
+            else:
+                entity.malware_suspicion = None
+
+        except Exception as e:
+            print(f"Warning: Malware detection check failed: {e}")
+            entity.malware_suspicion = None
+
         return entity
 
     except Exception as e:
