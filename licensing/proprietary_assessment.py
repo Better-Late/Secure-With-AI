@@ -3,7 +3,8 @@
 import os
 import re
 import json
-import requests
+import asyncio
+import aiohttp
 from typing import List, Optional, Tuple
 from bs4 import BeautifulSoup
 from dotenv import load_dotenv
@@ -22,6 +23,8 @@ class ProprietaryAssessment:
     terms_of_use: str
     privacy_assessment: str
     is_free: str
+    legal_sources: List[str]
+    pricing_sources: List[str]
 
 
 def _get_footer_legal_patterns() -> List[str]:
@@ -123,14 +126,14 @@ def _handle_cookie_consent(driver) -> None:
         print(f"    ℹ Cookie handling skipped: {e}")
 
 
-def _fetch_page_with_js(url: str) -> Optional[BeautifulSoup]:
+async def _fetch_page_with_js(url: str) -> Optional[BeautifulSoup]:
     """
     Fetch page with JavaScript execution using Selenium.
     Falls back to requests if Selenium is not available.
-    
+
     Args:
         url: URL to fetch
-    
+
     Returns:
         BeautifulSoup object or None if fetch fails
     """
@@ -141,7 +144,8 @@ def _fetch_page_with_js(url: str) -> Optional[BeautifulSoup]:
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
         from selenium.webdriver.support import expected_conditions as EC
-        
+        import asyncio
+
         # Setup headless Chrome
         chrome_options = Options()
         chrome_options.add_argument('--headless')
@@ -149,45 +153,50 @@ def _fetch_page_with_js(url: str) -> Optional[BeautifulSoup]:
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-gpu')
         chrome_options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
-        
-        driver = webdriver.Chrome(options=chrome_options)
-        driver.get(url)
-        
-        # Wait for page to load (wait for body to be present)
-        WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
-        )
-        # Additional wait for dynamic content
-        import time
-        time.sleep(2)
-        
-        # Handle cookie consent
-        _handle_cookie_consent(driver)
 
-        time.sleep(2)
+        # Run Selenium in executor to avoid blocking
+        loop = asyncio.get_event_loop()
 
-        
-        # Get page source after JS execution
-        html = driver.page_source
-        driver.quit()
-        
+        def selenium_fetch():
+            driver = webdriver.Chrome(options=chrome_options)
+            driver.get(url)
+
+            # Wait for page to load (wait for body to be present)
+            WebDriverWait(driver, 10).until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
+            )
+            # Additional wait for dynamic content
+            import time
+            time.sleep(2)
+
+            # Handle cookie consent
+            _handle_cookie_consent(driver)
+
+            time.sleep(2)
+
+            # Get page source after JS execution
+            html = driver.page_source
+            driver.quit()
+            return html
+
+        html = await loop.run_in_executor(None, selenium_fetch)
         return BeautifulSoup(html, 'html.parser')
-        
+
     except ImportError:
         print("  Selenium not available, falling back to requests")
-        return _fetch_page_simple(url)
+        return await _fetch_page_simple(url)
     except Exception as e:
         print(f"  Error with Selenium, falling back to requests: {e}")
-        return _fetch_page_simple(url)
+        return await _fetch_page_simple(url)
 
 
-def _fetch_page_simple(url: str) -> Optional[BeautifulSoup]:
+async def _fetch_page_simple(url: str) -> Optional[BeautifulSoup]:
     """
     Simple page fetch without JavaScript execution.
-    
+
     Args:
         url: URL to fetch
-    
+
     Returns:
         BeautifulSoup object or None if fetch fails
     """
@@ -195,9 +204,11 @@ def _fetch_page_simple(url: str) -> Optional[BeautifulSoup]:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
-        return BeautifulSoup(response.text, 'html.parser')
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=10)) as response:
+                response.raise_for_status()
+                html = await response.text()
+                return BeautifulSoup(html, 'html.parser')
     except Exception as e:
         print(f"  Error fetching {url}: {e}")
         return None
@@ -225,20 +236,21 @@ def _normalize_domain(url: str) -> str:
     return domain
 
 
-def _resolve_redirect(url: str) -> str:
+async def _resolve_redirect(url: str) -> str:
     """
     Resolve URL redirects to get final destination.
-    
+
     Args:
         url: URL that may redirect
-    
+
     Returns:
         Final URL after following redirects
     """
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-        response = requests.head(url, headers=headers, allow_redirects=True, timeout=5)
-        return response.url
+        async with aiohttp.ClientSession() as session:
+            async with session.head(url, headers=headers, allow_redirects=True, timeout=aiohttp.ClientTimeout(total=5)) as response:
+                return str(response.url)
     except:
         return url
 
@@ -301,89 +313,107 @@ def _find_pricing_links(soup: BeautifulSoup, base_url: str) -> List[str]:
     return _find_links_by_patterns(soup, base_url, patterns, "pricing")
 
 
-def _fetch_page_text(url: str) -> Optional[str]:
+async def _fetch_page_text(url: str) -> Optional[str]:
     """
     Fetch and extract text content from a URL.
-    
+
     Args:
         url: URL to fetch
-    
+
     Returns:
         Extracted text content or None if fetch fails
     """
-    soup = _fetch_page_with_js(url)
-    
+    soup = await _fetch_page_with_js(url)
+
     if soup:
         text = _clean_text_content(soup)
         return text  # Limit to 10k chars
-    
+
     return None
 
 
-def _collect_legal_texts(legal_urls: List[str]) -> str:
+async def _collect_legal_texts(legal_urls: List[str]) -> Tuple[str, List[str]]:
     """
-    Fetch, summarize, and combine text from legal pages.
+    Fetch, summarize, and combine text from legal pages concurrently.
     Focuses on software-relevant privacy and terms information.
-    
+
     Args:
         legal_urls: List of URLs to legal/privacy pages
-    
+
     Returns:
-        Combined summarized text from legal pages
+        Tuple of (combined summarized text, list of URLs with relevant content)
     """
-    all_summaries = []
-    
-    for url in legal_urls:
+    async def process_legal_page(url: str) -> Optional[Tuple[str, str]]:
         print(f"  Fetching legal page: {url}")
-        text = _fetch_page_text(url)
-        
+        text = await _fetch_page_text(url)
+
         if text:
             print(f"    Analyzing for software privacy/terms...")
-            summary = summarize_legal_text(text, page_url=url, max_chars=1000)
-            
+            summary = await summarize_legal_text(text, page_url=url, max_chars=1000)
+
             if summary and summary.strip():
-                all_summaries.append(f"=== From {url} ===\n{summary}\n")
                 print(f"    ✓ Found relevant terms")
+                return (f"=== From {url} ===\n{summary}\n", url)
             else:
                 print(f"    ✗ No relevant terms (skipping)")
-    
-    if not all_summaries:
+        return None
+
+    # Process all legal pages concurrently
+    results = await asyncio.gather(*[process_legal_page(url) for url in legal_urls], return_exceptions=True)
+
+    # Filter out None values and exceptions
+    valid_results = [r for r in results if r and not isinstance(r, Exception)]
+
+    if not valid_results:
         print("  Warning: No software-relevant legal terms found")
-    
-    return "\n\n".join(all_summaries)
+        return ("", [])
+
+    all_summaries = [text for text, _ in valid_results]
+    relevant_urls = [url for _, url in valid_results]
+
+    return ("\n\n".join(all_summaries), relevant_urls)
 
 
-def _collect_pricing_texts(pricing_urls: List[str]) -> str:
+async def _collect_pricing_texts(pricing_urls: List[str]) -> Tuple[str, List[str]]:
     """
-    Fetch, summarize, and combine text from pricing pages.
-    
+    Fetch, summarize, and combine text from pricing pages concurrently.
+
     Args:
         pricing_urls: List of URLs to pricing/plans pages
-    
+
     Returns:
-        Combined summarized text from pricing pages
+        Tuple of (combined summarized text, list of URLs with relevant content)
     """
-    all_summaries = []
-    
-    for url in pricing_urls:
+    async def process_pricing_page(url: str) -> Optional[Tuple[str, str]]:
         print(f"  Fetching pricing page: {url}")
-        text = _fetch_page_text(url)
-        
+        text = await _fetch_page_text(url)
+
         if text:
             print(f"    Analyzing for pricing information...")
             # Summarize with focus on pricing
-            summary = summarize_legal_text(text, page_url=url, max_chars=800)
-            
+            summary = await summarize_legal_text(text, page_url=url, max_chars=800)
+
             if summary and summary.strip():
-                all_summaries.append(f"=== From {url} ===\n{summary}\n")
                 print(f"    ✓ Found pricing info")
+                return (f"=== From {url} ===\n{summary}\n", url)
             else:
                 print(f"    ✗ No pricing info (skipping)")
-    
-    if not all_summaries:
+        return None
+
+    # Process all pricing pages concurrently
+    results = await asyncio.gather(*[process_pricing_page(url) for url in pricing_urls], return_exceptions=True)
+
+    # Filter out None values and exceptions
+    valid_results = [r for r in results if r and not isinstance(r, Exception)]
+
+    if not valid_results:
         print("  Warning: No pricing information found")
-    
-    return "\n\n".join(all_summaries)
+        return ("", [])
+
+    all_summaries = [text for text, _ in valid_results]
+    relevant_urls = [url for _, url in valid_results]
+
+    return ("\n\n".join(all_summaries), relevant_urls)
 
 
 def _create_proprietary_assessment_prompt(legal_text: str, pricing_text: str) -> str:
@@ -419,43 +449,48 @@ Provide a JSON response with three assessments:
 - Highlight RED FLAGS or concerning terms
 - If information missing, state "Information not provided"
 - Be objective and factual
+- Do NOT use latex or markdown formatting - output plain text.
 """
 
 
 def _parse_proprietary_assessment(response_text: str) -> ProprietaryAssessment:
     """
     Parse AI response into ProprietaryAssessment.
-    
+
     Args:
         response_text: AI response text
-    
+
     Returns:
         ProprietaryAssessment dataclass
     """
     response_text = re.sub(r'```json\s*|\s*```', '', response_text).strip()
-    
+
     try:
         result = json.loads(response_text)
         return ProprietaryAssessment(
             terms_of_use=result.get('terms_of_use', 'Assessment not available'),
             privacy_assessment=result.get('privacy_assessment', 'Assessment not available'),
-            is_free=result.get('is_free', 'Pricing information not available')
+            is_free=result.get('is_free', 'Pricing information not available'),
+            legal_sources=[],
+            pricing_sources=[]
         )
     except json.JSONDecodeError:
         return ProprietaryAssessment(
             terms_of_use='Failed to parse assessment',
             privacy_assessment='Failed to parse assessment',
-            is_free='Failed to parse assessment'
+            is_free='Failed to parse assessment',
+            legal_sources=[],
+            pricing_sources=[]
         )
 
 
-def assess_proprietary_software(website_url: str) -> Optional[ProprietaryAssessment]:
+async def assess_proprietary_software(website_url: str) -> Optional[ProprietaryAssessment]:
     """
     Assess proprietary software terms of use, privacy, and pricing.
-    
+
     Args:
         website_url: Website URL to assess
-    
+
     Returns:
         ProprietaryAssessment or None if assessment fails
     """
@@ -463,49 +498,51 @@ def assess_proprietary_software(website_url: str) -> Optional[ProprietaryAssessm
         if not is_available():
             print("Warning: GEMINI_API_KEY not set, cannot assess proprietary software")
             return None
-        
+
         print(f"Assessing proprietary software at {website_url}...")
-        
+
         # Step 1: Fetch main page
-        soup = _fetch_page_with_js(website_url)
-        
+        soup = await _fetch_page_with_js(website_url)
+
         if not soup:
             print("  Failed to fetch website")
             return None
-        
+
         # Step 2: Find legal and pricing links
         legal_urls = _find_legal_links(soup, website_url)
         pricing_urls = _find_pricing_links(soup, website_url)
-        
+
         if not legal_urls and not pricing_urls:
             print("  No legal or pricing links found")
             return None
-        
+
         print(f"  Found {len(legal_urls)} legal pages and {len(pricing_urls)} pricing pages")
-        
-        # Step 3: Collect texts separately
-        legal_text = _collect_legal_texts(legal_urls) if legal_urls else ""
-        pricing_text = _collect_pricing_texts(pricing_urls) if pricing_urls else ""
-        
+
+        # Step 3: Collect texts separately and track relevant sources
+        legal_text, legal_sources = await _collect_legal_texts(legal_urls) if legal_urls else ("", [])
+        pricing_text, pricing_sources = await _collect_pricing_texts(pricing_urls) if pricing_urls else ("", [])
+
         if not legal_text and not pricing_text:
             print("  Insufficient content found")
             return None
-        
+
         # Step 4: Use AI to assess with both contexts
         print("  Analyzing with AI...")
         prompt = _create_proprietary_assessment_prompt(legal_text, pricing_text)
-        response_text = generate_content(prompt)
-        
+        response_text = await generate_content(prompt)
+
         if not response_text:
             print("  Failed to get AI assessment")
             return None
-        
-        # Step 5: Parse response
+
+        # Step 5: Parse response and add sources
         assessment = _parse_proprietary_assessment(response_text)
-        
+        assessment.legal_sources = legal_sources
+        assessment.pricing_sources = pricing_sources
+
         print("  ✓ Proprietary assessment complete")
         return assessment
-        
+
     except Exception as e:
         print(f"Error in proprietary assessment: {e}")
         return None

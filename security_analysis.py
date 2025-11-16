@@ -8,9 +8,12 @@ from popularity import getPopularity
 from score import getCveScore, getReputationScore
 from virustotal import get_parse_hashfile_assesment
 from virustotal import FileAssessment, get_parse_hashfile_assesment
+from gdpr import gdpr_search
+from html import unescape
+import re
+
 import os
 from dotenv import load_dotenv
-
 load_dotenv()
 
 class AnalysisResult(Dict[str, any]):
@@ -20,8 +23,9 @@ class AnalysisResult(Dict[str, any]):
 def calculate_security_score(
     product_name: str,
     vulnerabilities: Optional[VulnerabilitySearchResult] = None,
-    hash_value: Optional[str] = None
-) -> float:
+    hash_value: Optional[str] = None,
+    isGdprFined = False
+    ): 
     """
     Calculate overall security score based on:
     - Popularity score (0-100)
@@ -36,6 +40,13 @@ def calculate_security_score(
     Returns:
         Overall security score (0-100)
     """
+
+    calculated_score_breakdown = {}
+
+
+    gdpr_penalty = 10 if isGdprFined else 0
+    calculated_score_breakdown["GDPR Penalty"] = gdpr_penalty
+    
     # Get popularity score
     try:
         popularity_score = getPopularity(product_name)
@@ -48,11 +59,14 @@ def calculate_security_score(
         cve_score = getCveScore(vulnerabilities)
     else:
         cve_score = 100.0  # No vulnerabilities = perfect score
+
+    calculated_score_breakdown["CVE Score"] = cve_score
     
     print(f"Popularity Score: {popularity_score}, CVE Score: {cve_score}")
 
     # Calculate reputation score (combines popularity and CVE)
     reputation_score = getReputationScore(popularity_score, cve_score)
+    calculated_score_breakdown['Reputation Score'] = reputation_score
     
     # If hash is provided, factor in VirusTotal results
     if hash_value:
@@ -72,6 +86,7 @@ def calculate_security_score(
             else:
                 vt_score = 50.0  # Unknown
             
+            calculated_score_breakdown["VT Score"] = vt_score
             # Combine scores: 50% reputation, 50% VirusTotal
             final_score = (reputation_score * 0.5) + (vt_score * 0.5)
         except Exception as e:
@@ -81,37 +96,39 @@ def calculate_security_score(
         # No hash provided, use reputation score only
         final_score = reputation_score
     
-    return round(max(0.0, min(100.0, final_score)), 2)
+    return round(max(0.0, min(100.0, final_score)), 2) - gdpr_penalty, calculated_score_breakdown
 
 
 # Global cache instance using diskcache
 _cache = Cache('./cache_dir')
 
 
-def analysis(company_name: str, product_name: str, hash_value: Optional[str] = None) -> Dict[str, any]:
+async def analysis(company_name: str, product_name: str, hash_value: Optional[str] = None) -> Dict[str, any]:
     """
     Placeholder function for security analysis.
     Replace this with your actual security summary generation logic.
-    
+
     Args:
         company_name: Name of the company
         product_name: Name of the program/product
         hash_value: Optional hash value for the product
-    
+
     Returns:
         Dict with 'score' (0-100) and 'summary' (markdown text)
     """
     # Create cache key including hash if available
     cache_key = f"{company_name}:{product_name}:{hash_value}" if hash_value else f"{company_name}:{product_name}"
-    
+
     # Check cache first
     cached_result = _cache.get(cache_key)
     if cached_result:
         return cached_result
-    
+
+    print("detecting entity...")
     # Perform actual analysis
     product_entity = detect_entity(f"{company_name} {product_name}")
 
+    print("detected entiy:", product_entity)
     # Handle case when entity detection fails
     if product_entity is None:
         result = render_analysis_not_found(company_name, product_name, hash_value)
@@ -119,8 +136,12 @@ def analysis(company_name: str, product_name: str, hash_value: Optional[str] = N
         return result
 
     hash_info = f"\n**Hash:** `{hash_value}`" if hash_value else ""
+    
+    #GDPR
+    gdpr_section, isFined = create_gdpr_fines(product_entity.vendor)
 
     vt_section = ""
+    license_info = None
     if product_entity.malware_suspicion and product_entity.malware_suspicion.flagged:
         malware_warning = f"\n\n**⚠️ Malware Suspicion:** This software has been flagged as potentially malicious for the following reasons:\n"
         for reason in product_entity.malware_suspicion.reasons:
@@ -131,6 +152,7 @@ def analysis(company_name: str, product_name: str, hash_value: Optional[str] = N
         vulnerabilities = None
         # Low score for flagged malware
         calculated_score = 10.0
+        calculated_score_breakdown = {}
     else:
         malware_warning = ""
         if hash_value and hash_value.strip():
@@ -143,32 +165,62 @@ def analysis(company_name: str, product_name: str, hash_value: Optional[str] = N
             # No hash provided
             vt_section = create_virustotal_section(None)
 
+        print("searching vulnerabilities...")
         vulnerabilities = search_vulnerabilities_structured((product_entity.vendor or '') + ' ' + (product_entity.full_name or ''))
+        print("found vulnerabilities:", vulnerabilities)
         vulnerability_section = create_vulnerability_section(vulnerabilities)
-        
+
         alternatives = search_alternatives(product_entity.full_name)
         alternative_section = create_alternative_section(alternatives)
 
         if is_open_source(product_entity):
-            license_info = get_license_opensource(product_entity.github_link)
+            # Try to get license from GitHub
+            license_info = await get_license_opensource(product_entity.github_link)
+
+            if license_info is None:
+                # GitHub license not found, treat as proprietary software
+                if product_entity.website:
+                    license_info = await get_license_closed_source(product_entity.website, product_entity.full_name)
+            else:
+                # GitHub license found, also analyze website for pricing/free info
+                if product_entity.website:
+                    try:
+                        website_license = await get_license_closed_source(product_entity.website, product_entity.full_name)
+                        # Merge is_free field from website analysis
+                        if website_license and website_license.is_free:
+                            license_info.is_free = website_license.is_free
+                    except Exception as e:
+                        print(f"Warning: Could not fetch website license info: {e}")
         else:
-            license_info = get_license_closed_source(product_entity.website, product_entity.full_name)
+            license_info = await get_license_closed_source(product_entity.website, product_entity.full_name)
         license_section = create_license_section(license_info)
-        
+
         # Calculate security score
-        calculated_score = calculate_security_score(
+        calculated_score, calculated_score_breakdown = calculate_security_score(
             product_name=product_entity.full_name,
             vulnerabilities=vulnerabilities,
-            hash_value=hash_value
+            hash_value=hash_value,
+            isGdprFined=isFined
         )
+    
+
+
+
+
+    # Add GitHub link if available
+    github_link = f" [![GitHub](:material/github:)]({product_entity.github_link})" if product_entity.github_link else ""
 
     result = {
+        'score_breakdown': calculated_score_breakdown,
         'score': calculated_score,
+        'license': license_info,
         'summary': f"""
-### Security Analysis for: [{product_entity.full_name}]({product_entity.website}) - {product_entity.vendor or ''}{hash_info}
+### Security Analysis for: [{product_entity.full_name}]({product_entity.website}) - {product_entity.vendor or ''}{github_link}{hash_info}
 
 #### Overview
 {product_entity.description or "No description available."}
+
+**Type:** {product_entity.software_type or "N/A"}
 
 {vt_section}
 {malware_warning}
@@ -187,6 +239,8 @@ def analysis(company_name: str, product_name: str, hash_value: Optional[str] = N
 
 {vulnerability_section}
 
+{gdpr_section}
+
 {alternative_section}
 """
     }
@@ -196,11 +250,11 @@ def analysis(company_name: str, product_name: str, hash_value: Optional[str] = N
     return result
 
 
-def create_vulnerability_section(vulnerabilities: VulnerabilitySearchResult) -> str:
+def create_vulnerability_section(vulnerabilities: Optional[VulnerabilitySearchResult]) -> str:
     """
     Create a markdown section summarizing vulnerabilities.
     """
-    if not vulnerabilities.results:
+    if not vulnerabilities or not vulnerabilities.results:
         return "No known vulnerabilities found."
 
     md = "#### Vulnerabilities Detected\n\n"
@@ -388,6 +442,7 @@ def render_analysis_not_found(company_name: str, product_name: str, hash_value: 
     
     result = {
         'score': 0,
+        'license': None,
         'summary': f"""
 ### Security Analysis for: {company_name} - {product_name}{hash_info}
 
@@ -418,6 +473,70 @@ Please try again with corrected information or contact support for manual analys
     return result
 
 
+
+
+def create_gdpr_fines(company_name: str):
+    """
+    Create a markdown section summarizing GDPR fines against a company.
+    Uses the results returned by gdpr_search().
+    """
+
+
+    def clean_html(text: str) -> str:
+        """Remove embedded HTML tags and return readable text."""
+        if not isinstance(text, str):
+            return str(text)
+        text = unescape(text)
+        return re.sub(r'<[^>]+>', '', text).strip()
+
+    try:
+        df = gdpr_search(company_name)
+    except Exception as e:
+        return f"#### GDPR Fines\n\nCould not retrieve GDPR data: {e}", False
+
+    if df is None or df.empty:
+        return "#### GDPR Fines\n\nNo GDPR enforcement actions found for this company.", False
+
+    required_columns = [
+        "ETid", "Country", "Date of Decision", "Fine [€]",
+        "Controller/Processor", "Quoted Art.", "Type", "Direct URL"
+    ]
+    for col in required_columns:
+        if col not in df.columns:
+            return f"#### GDPR Fines\n\nGDPR data missing required column: `{col}`.", False
+
+    md = "#### GDPR Enforcement Actions\n\n"
+    md += f"Found **{len(df)}** GDPR enforcement case(s) matching **{company_name}**.\n\n"
+
+    # Updated table header including Controller/Processor (company)
+    md += (
+        "| Date | Fine (€) | Company | Country | Type | Article | Case Link |\n"
+        "|------|----------|---------|---------|------|---------|-----------|\n"
+    )
+
+    for _, row in df.iterrows():
+        date = clean_html(row["Date of Decision"])
+        fine = clean_html(row["Fine [€]"])
+        controller = clean_html(row["Controller/Processor"])   # ← new column included
+        country = clean_html(row["Country"])
+        ptype = clean_html(row["Type"])
+        article = clean_html(row["Quoted Art."])
+        url = clean_html(row["Direct URL"])
+
+        # extract URLs
+        url_matches = re.findall(r"(https?://[^\s\"']+)", url)
+        url_final = url_matches[0] if url_matches else url
+
+        md += (
+            f"| {date} | {fine} | {controller} | {country} | "
+            f"{ptype} | {article} | [Link]({url_final}) |\n"
+        )
+
+    return md, True
+
+
+    
+
 def is_open_source(product_entity: SoftwareEntity) -> bool:
     """
     Determine if the software is open-source based on available information.
@@ -433,9 +552,27 @@ def create_license_section(license: Optional[License]) -> str:
     """
     if not license:
         return "No license information found."
-  
+
     md = "#### License Information\n\n"
     md += f"- **License Type:** {license.ltype}\n"
     md += f"- **License URL:** {license.url}\n"
     md += f"- **Is Free Software:** {license.is_free or 'N/A'}\n"
+
+    # Add sources section if available
+    if license.legal_sources or license.pricing_sources:
+        md += "\n<details>\n<summary><b>📄 View Sources</b></summary>\n\n\n"
+
+        if license.legal_sources:
+            md += "**Legal/Terms Sources:**\n"
+            for source in license.legal_sources:
+                md += f"- [{source}]({source})\n"
+            md += "\n"
+
+        if license.pricing_sources:
+            md += "**Pricing Sources:**\n"
+            for source in license.pricing_sources:
+                md += f"- [{source}]({source})\n"
+
+        md += "</details>\n"
+
     return md

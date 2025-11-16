@@ -78,7 +78,7 @@ def getCveScore(cves: VulnerabilitySearchResult) -> float:
 
     # Map unbounded total_risk -> [0, 100] safety score using a saturating function
     # K controls how quickly the score drops. Tune as needed.
-    K = 30.0  # "moderate" total risk level -> about 50 safety
+    K = 40.0  # "moderate" total risk level -> about 50 safety
     if total_risk <= 0:
         return 100.0
 
@@ -114,8 +114,11 @@ def getReputationScore(
 
 
 
-def combine_scores(reputationScore, cve_score): # add other scores
-  return 0.7*cve_score + 0.3*reputationScore #adjust weights
+
+
+def combine_scores(reputationScore, cve_score, gdpr_fine=False): # add other scores
+  score = 0.7*cve_score + 0.3*reputationScore #adjust weights 
+  return score if not gdpr_fine else score - 10
 
 
 if __name__ == "__main__":
