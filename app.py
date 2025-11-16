@@ -54,178 +54,29 @@ def get_score_color(score: int) -> str:
 
 
 def apply_custom_css():
-    """Apply custom CSS for Obsidian-inspired styling."""
+    """Apply minimal custom CSS styling - rely mainly on Streamlit theme."""
     st.markdown("""
     <style>
-        /* Support both light and dark themes */
-        :root {
-            color-scheme: light dark;
-        }
-        
-        /* Main background - dark mode */
-        [data-testid="stAppViewContainer"][data-theme="dark"] .main,
-        .main {
-            background: #1a1a2e !important;
-        }
-        
-        /* Main background - light mode */
-        [data-testid="stAppViewContainer"][data-theme="light"] .main {
-            background: #f5f5f5 !important;
-        }
-        
-        /* Sidebar styling - dark mode */
-        [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"],
-        [data-testid="stSidebar"] {
-            background: #1e1e1e !important;
-        }
-        
-        /* Sidebar styling - light mode */
-        [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] {
-            background: #ffffff !important;
-            border-right: 1px solid #e0e0e0 !important;
-        }
-        
-        /* Sidebar text - dark mode */
-        [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"] .element-container,
-        [data-testid="stSidebar"] .element-container {
-            color: #dcddde !important;
-        }
-        
-        /* Sidebar text - light mode */
-        [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] .element-container {
-            color: #2d2d2d !important;
-        }
-        
-        /* Sidebar headers - dark mode */
-        [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"] h1, 
-        [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"] h2, 
-        [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"] h3,
-        [data-testid="stSidebar"] h1, 
-        [data-testid="stSidebar"] h2, 
-        [data-testid="stSidebar"] h3 {
-            color: #8b8b8b !important;
-        }
-        
-        /* Sidebar headers - light mode */
-        [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] h1,
-        [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] h2,
-        [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] h3 {
-            color: #5a5a5a !important;
-        }
-        
-        /* Headers - all modes */
-        h1, h2, h3 {
-            color: #8b5cf6 !important;
-            font-weight: 700;
-        }
-        
-        /* Input fields - styling only */
-        .stTextInput input {
-            border-radius: 8px !important;
-            transition: all 0.3s ease;
-        }
-        
-        /* Input fields focus - all modes */
+        /* Input fields focus */
         .stTextInput input:focus {
             border-color: #8b5cf6 !important;
             box-shadow: 0 0 0 1px #8b5cf6 !important;
         }
         
-        /* Buttons - all modes */
+        /* Buttons styling */
         .stButton button {
             border-radius: 8px !important;
             font-weight: 600 !important;
             transition: all 0.3s ease !important;
-            border: none !important;
-        }
-        
-        .stButton button[kind="primary"] {
-            background: #8b5cf6 !important;
-            color: white !important;
         }
         
         .stButton button[kind="primary"]:hover {
-            background: #7c3aed !important;
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4) !important;
         }
         
-        /* Secondary buttons - dark mode */
-        [data-testid="stAppViewContainer"][data-theme="dark"] .stButton button[kind="secondary"],
-        .stButton button[kind="secondary"] {
-            background: #2d2d3a !important;
-            color: #e0e0e0 !important;
-        }
-        
-        /* Secondary buttons - light mode */
-        [data-testid="stAppViewContainer"][data-theme="light"] .stButton button[kind="secondary"] {
-            background: #e0e0e0 !important;
-            color: #2d2d2d !important;
-        }
-        
-        /* Secondary buttons hover - dark mode */
-        [data-testid="stAppViewContainer"][data-theme="dark"] .stButton button[kind="secondary"]:hover,
         .stButton button[kind="secondary"]:hover {
-            background: #3a3a4e !important;
             transform: translateY(-2px);
-        }
-        
-        /* Secondary buttons hover - light mode */
-        [data-testid="stAppViewContainer"][data-theme="light"] .stButton button[kind="secondary"]:hover {
-            background: #d0d0d0 !important;
-            transform: translateY(-2px);
-        }
-        
-        /* Expander - dark mode */
-        [data-testid="stAppViewContainer"][data-theme="dark"] .streamlit-expanderHeader,
-        .streamlit-expanderHeader {
-            background-color: #1e1e2e !important;
-            border-radius: 8px !important;
-            border: 1px solid #3a3a4e !important;
-            color: #e0e0e0 !important;
-        }
-        
-        /* Expander - light mode */
-        [data-testid="stAppViewContainer"][data-theme="light"] .streamlit-expanderHeader {
-            background-color: #ffffff !important;
-            border: 1px solid #d0d0d0 !important;
-            color: #2d2d2d !important;
-        }
-        
-        /* Expander content - dark mode */
-        [data-testid="stAppViewContainer"][data-theme="dark"] .streamlit-expanderContent,
-        .streamlit-expanderContent {
-            background-color: #1a1a2e !important;
-            border: 1px solid #3a3a4e !important;
-            border-top: none !important;
-        }
-        
-        /* Expander content - light mode */
-        [data-testid="stAppViewContainer"][data-theme="light"] .streamlit-expanderContent {
-            background-color: #fafafa !important;
-            border: 1px solid #d0d0d0 !important;
-            border-top: none !important;
-        }
-        
-        /* File uploader - dark mode */
-        [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stFileUploader"],
-        [data-testid="stFileUploader"] {
-            background-color: #2a2a2a !important;
-            border-radius: 8px;
-            border: 1px dashed #4a4a4a !important;
-            padding: 1rem;
-        }
-        
-        
-        /* Dividers - dark mode */
-        [data-testid="stAppViewContainer"][data-theme="dark"] hr,
-        hr {
-            border-color: #3a3a4e !important;
-        }
-        
-        /* Dividers - light mode */
-        [data-testid="stAppViewContainer"][data-theme="light"] hr {
-            border-color: #d0d0d0 !important;
         }
         
         /* Score card enhancement */
@@ -233,61 +84,11 @@ def apply_custom_css():
             border-radius: 12px;
             padding: 24px;
             text-align: center;
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
             transition: transform 0.3s ease;
         }
         
         .score-card:hover {
             transform: translateY(-4px);
-            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
-        }
-        
-        /* Markdown containers - dark mode */
-        [data-testid="stAppViewContainer"][data-theme="dark"] .element-container,
-        .element-container {
-            color: #d0d0d0 !important;
-        }
-        
-        /* Markdown containers - light mode */
-        [data-testid="stAppViewContainer"][data-theme="light"] .element-container {
-            color: #2d2d2d !important;
-        }
-        
-        /* Success/Warning/Error messages */
-        .stSuccess, .stWarning, .stError {
-            border-radius: 8px !important;
-        }
-        
-        /* Tables - dark mode */
-        [data-testid="stAppViewContainer"][data-theme="dark"] table,
-        table {
-            background-color: #1e1e2e !important;
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        
-        /* Tables - light mode */
-        [data-testid="stAppViewContainer"][data-theme="light"] table {
-            background-color: #ffffff !important;
-        }
-        
-        /* Table headers - all modes */
-        th {
-            background: #8b5cf6 !important;
-            color: white !important;
-        }
-        
-        /* Table cells - dark mode */
-        [data-testid="stAppViewContainer"][data-theme="dark"] td,
-        td {
-            color: #d0d0d0 !important;
-            border-color: #3a3a4e !important;
-        }
-        
-        /* Table cells - light mode */
-        [data-testid="stAppViewContainer"][data-theme="light"] td {
-            color: #2d2d2d !important;
-            border-color: #d0d0d0 !important;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -300,10 +101,10 @@ def render_header():
         <h1 style="font-size: 3.5rem; margin-bottom: 0.5rem; color: #8b5cf6;">
             Secure with AI
         </h1>
-        <p style="font-size: 1.2rem; color: #a0a0b0; margin-top: 0;">
+        <p style="font-size: 1.2rem; margin-top: 0;">
             Comprehensive security analysis powered by artificial intelligence
         </p>
-        <p style="font-size: 0.95rem; color: #808090; max-width: 600px; margin: 1rem auto;">
+        <p style="font-size: 0.95rem; max-width: 600px; margin: 1rem auto;">
             Enter company and product details to analyze and click <strong>Analyze</strong> to get security summaries
         </p>
     </div>
@@ -377,9 +178,7 @@ def render_sidebar():
         
         # CSV Upload
         st.markdown("""
-        <div style="background: #2a2a2a; 
-                    padding: 1rem; border-radius: 8px; margin-bottom: 1rem; 
-                    border: 1px solid #3a3a3a;">
+        <div style="padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
             <p style="color: #8b8b8b; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.95rem;">Upload CSV</p>
         </div>
         """, unsafe_allow_html=True)
@@ -403,17 +202,16 @@ def render_sidebar():
                 else:
                     st.warning("No valid entries found")
         
-        st.markdown("<div style='margin: 1.5rem 0; height: 1px; background: #3a3a3a;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin: 1.5rem 0; height: 1px;'></div>", unsafe_allow_html=True)
         
         if st.button("Clear All Results", type="secondary", use_container_width=True):
             st.session_state.search_results = {}
             st.rerun()
         
-        st.markdown("<div style='margin: 1.5rem 0; height: 1px; background: #3a3a3a;'></div>", unsafe_allow_html=True)
+        st.markdown("<div style='margin: 1.5rem 0; height: 1px;'></div>", unsafe_allow_html=True)
         
         st.markdown("""
-        <div style="background: #2a2a2a; 
-                    padding: 1.2rem; border-radius: 8px; border: 1px solid #3a3a3a;">
+        <div style="padding: 1.2rem; border-radius: 8px;">
             <p style="color: #8b8b8b; font-weight: 600; margin-bottom: 1rem; font-size: 1.05rem;">
                 How to Use
             </p>
@@ -442,8 +240,7 @@ def render_results(i: int, stored_company: str, stored_product: str, stored_hash
     """Render the results section for a search field."""
     hash_display = f" (Hash: {stored_hash[:16]}...)" if stored_hash else ""
     st.markdown(f"""
-    <div style="background: #1e1e2e; 
-                padding: 1rem; border-radius: 12px; margin: 1rem 0; 
+    <div style="padding: 1rem; border-radius: 12px; margin: 1rem 0; 
                 border: 1px solid #3a3a4e;">
         <p style="color: #a0a0b0; margin: 0; font-size: 0.9rem;">
             <strong style="color: #8b5cf6;">Results for:</strong> 
