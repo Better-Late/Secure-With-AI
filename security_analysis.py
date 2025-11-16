@@ -610,6 +610,8 @@ async def create_data_breach_section(company_name: str):
     Returns:
         tuple: (markdown_string, has_breaches_bool)
     """
+    if company_name is None or company_name.strip() == "":
+        return "#### Data Breaches\n\nNo company name provided for breach search.", False
     # Run file I/O in executor to avoid blocking
     loop = asyncio.get_event_loop()
 
