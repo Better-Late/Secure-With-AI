@@ -101,7 +101,7 @@ def calculate_security_score(
 
 
 # Global cache instance using diskcache
-_cache = Cache('./cache_dir')
+_cache = Cache('/mnt/cache/security_analysis/')
 
 
 async def analysis(company_name: str, product_name: str, hash_value: Optional[str] = None) -> Dict[str, any]:
