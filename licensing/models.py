@@ -32,6 +32,9 @@ class License:
     terms_of_use: Optional[str] = None
     privacy_assessment: Optional[str] = None
     is_free: Optional[str] = None
+    # Source URLs used during assessment
+    legal_sources: Optional[list[str]] = None
+    pricing_sources: Optional[list[str]] = None
 
 
 @dataclass

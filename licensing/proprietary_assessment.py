@@ -23,6 +23,8 @@ class ProprietaryAssessment:
     terms_of_use: str
     privacy_assessment: str
     is_free: str
+    legal_sources: List[str]
+    pricing_sources: List[str]
 
 
 def _get_footer_legal_patterns() -> List[str]:
@@ -330,7 +332,7 @@ async def _fetch_page_text(url: str) -> Optional[str]:
     return None
 
 
-async def _collect_legal_texts(legal_urls: List[str]) -> str:
+async def _collect_legal_texts(legal_urls: List[str]) -> Tuple[str, List[str]]:
     """
     Fetch, summarize, and combine text from legal pages concurrently.
     Focuses on software-relevant privacy and terms information.
@@ -339,9 +341,9 @@ async def _collect_legal_texts(legal_urls: List[str]) -> str:
         legal_urls: List of URLs to legal/privacy pages
 
     Returns:
-        Combined summarized text from legal pages
+        Tuple of (combined summarized text, list of URLs with relevant content)
     """
-    async def process_legal_page(url: str) -> Optional[str]:
+    async def process_legal_page(url: str) -> Optional[Tuple[str, str]]:
         print(f"  Fetching legal page: {url}")
         text = await _fetch_page_text(url)
 
@@ -351,7 +353,7 @@ async def _collect_legal_texts(legal_urls: List[str]) -> str:
 
             if summary and summary.strip():
                 print(f"    ✓ Found relevant terms")
-                return f"=== From {url} ===\n{summary}\n"
+                return (f"=== From {url} ===\n{summary}\n", url)
             else:
                 print(f"    ✗ No relevant terms (skipping)")
         return None
@@ -360,15 +362,19 @@ async def _collect_legal_texts(legal_urls: List[str]) -> str:
     results = await asyncio.gather(*[process_legal_page(url) for url in legal_urls], return_exceptions=True)
 
     # Filter out None values and exceptions
-    all_summaries = [r for r in results if r and not isinstance(r, Exception)]
+    valid_results = [r for r in results if r and not isinstance(r, Exception)]
 
-    if not all_summaries:
+    if not valid_results:
         print("  Warning: No software-relevant legal terms found")
+        return ("", [])
 
-    return "\n\n".join(all_summaries)
+    all_summaries = [text for text, _ in valid_results]
+    relevant_urls = [url for _, url in valid_results]
+
+    return ("\n\n".join(all_summaries), relevant_urls)
 
 
-async def _collect_pricing_texts(pricing_urls: List[str]) -> str:
+async def _collect_pricing_texts(pricing_urls: List[str]) -> Tuple[str, List[str]]:
     """
     Fetch, summarize, and combine text from pricing pages concurrently.
 
@@ -376,9 +382,9 @@ async def _collect_pricing_texts(pricing_urls: List[str]) -> str:
         pricing_urls: List of URLs to pricing/plans pages
 
     Returns:
-        Combined summarized text from pricing pages
+        Tuple of (combined summarized text, list of URLs with relevant content)
     """
-    async def process_pricing_page(url: str) -> Optional[str]:
+    async def process_pricing_page(url: str) -> Optional[Tuple[str, str]]:
         print(f"  Fetching pricing page: {url}")
         text = await _fetch_page_text(url)
 
@@ -389,7 +395,7 @@ async def _collect_pricing_texts(pricing_urls: List[str]) -> str:
 
             if summary and summary.strip():
                 print(f"    ✓ Found pricing info")
-                return f"=== From {url} ===\n{summary}\n"
+                return (f"=== From {url} ===\n{summary}\n", url)
             else:
                 print(f"    ✗ No pricing info (skipping)")
         return None
@@ -398,12 +404,16 @@ async def _collect_pricing_texts(pricing_urls: List[str]) -> str:
     results = await asyncio.gather(*[process_pricing_page(url) for url in pricing_urls], return_exceptions=True)
 
     # Filter out None values and exceptions
-    all_summaries = [r for r in results if r and not isinstance(r, Exception)]
+    valid_results = [r for r in results if r and not isinstance(r, Exception)]
 
-    if not all_summaries:
+    if not valid_results:
         print("  Warning: No pricing information found")
+        return ("", [])
 
-    return "\n\n".join(all_summaries)
+    all_summaries = [text for text, _ in valid_results]
+    relevant_urls = [url for _, url in valid_results]
+
+    return ("\n\n".join(all_summaries), relevant_urls)
 
 
 def _create_proprietary_assessment_prompt(legal_text: str, pricing_text: str) -> str:
@@ -439,33 +449,38 @@ Provide a JSON response with three assessments:
 - Highlight RED FLAGS or concerning terms
 - If information missing, state "Information not provided"
 - Be objective and factual
+- Do NOT use latex or markdown formatting - output plain text.
 """
 
 
 def _parse_proprietary_assessment(response_text: str) -> ProprietaryAssessment:
     """
     Parse AI response into ProprietaryAssessment.
-    
+
     Args:
         response_text: AI response text
-    
+
     Returns:
         ProprietaryAssessment dataclass
     """
     response_text = re.sub(r'```json\s*|\s*```', '', response_text).strip()
-    
+
     try:
         result = json.loads(response_text)
         return ProprietaryAssessment(
             terms_of_use=result.get('terms_of_use', 'Assessment not available'),
             privacy_assessment=result.get('privacy_assessment', 'Assessment not available'),
-            is_free=result.get('is_free', 'Pricing information not available')
+            is_free=result.get('is_free', 'Pricing information not available'),
+            legal_sources=[],
+            pricing_sources=[]
         )
     except json.JSONDecodeError:
         return ProprietaryAssessment(
             terms_of_use='Failed to parse assessment',
             privacy_assessment='Failed to parse assessment',
-            is_free='Failed to parse assessment'
+            is_free='Failed to parse assessment',
+            legal_sources=[],
+            pricing_sources=[]
         )
 
 
@@ -503,9 +518,9 @@ async def assess_proprietary_software(website_url: str) -> Optional[ProprietaryA
 
         print(f"  Found {len(legal_urls)} legal pages and {len(pricing_urls)} pricing pages")
 
-        # Step 3: Collect texts separately
-        legal_text = await _collect_legal_texts(legal_urls) if legal_urls else ""
-        pricing_text = await _collect_pricing_texts(pricing_urls) if pricing_urls else ""
+        # Step 3: Collect texts separately and track relevant sources
+        legal_text, legal_sources = await _collect_legal_texts(legal_urls) if legal_urls else ("", [])
+        pricing_text, pricing_sources = await _collect_pricing_texts(pricing_urls) if pricing_urls else ("", [])
 
         if not legal_text and not pricing_text:
             print("  Insufficient content found")
@@ -520,8 +535,10 @@ async def assess_proprietary_software(website_url: str) -> Optional[ProprietaryA
             print("  Failed to get AI assessment")
             return None
 
-        # Step 5: Parse response
+        # Step 5: Parse response and add sources
         assessment = _parse_proprietary_assessment(response_text)
+        assessment.legal_sources = legal_sources
+        assessment.pricing_sources = pricing_sources
 
         print("  ✓ Proprietary assessment complete")
         return assessment

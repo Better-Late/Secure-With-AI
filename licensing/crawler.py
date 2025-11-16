@@ -43,7 +43,9 @@ async def get_license_closed_source(
                 url=website_url,
                 terms_of_use=assessment.terms_of_use,
                 privacy_assessment=assessment.privacy_assessment,
-                is_free=assessment.is_free
+                is_free=assessment.is_free,
+                legal_sources=assessment.legal_sources,
+                pricing_sources=assessment.pricing_sources
             )
 
         print("Failed to extract proprietary software information.")

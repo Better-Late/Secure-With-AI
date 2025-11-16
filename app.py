@@ -164,7 +164,7 @@ def render_results(i: int, stored_company: str, stored_product: str, stored_hash
     with col_summary:
         # Display summary in an expander
         with st.expander("📋 View Full Summary", expanded=True):
-            st.markdown(result['summary'])
+            st.markdown(result['summary'], unsafe_allow_html=True)
 
 
 def render_search_field(i: int):
