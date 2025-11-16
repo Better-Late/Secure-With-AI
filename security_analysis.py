@@ -101,10 +101,10 @@ def calculate_security_score(
 
 
 # Global cache instance using diskcache
-if os.environ['LOCAL'] == 'true':
+if os.environ.get('LOCAL', 'false') == 'true':
      _cache = Cache('./cache_dir')
 else:
-    _cache = Cache('/mnt/cache/security_analysis/')
+    _cache = Cache('/mnt/cache/security_analysis/') 
 
 
 async def analysis(company_name: str, product_name: str, hash_value: Optional[str] = None) -> Dict[str, any]:
