@@ -34,7 +34,7 @@ def get_gemini_api_key():
         sys.exit(1)
     return api_key
 
-def call_gemini_api(api_key, user_query) -> tuple[SoftwareEntity | None, ]:
+async def call_gemini_api(api_key, user_query) -> tuple[SoftwareEntity | None, ]:
     system_prompt = (
         "You are a software information retrieval assistant. "
         "You may call the provided Google Search tool to look up facts, but do NOT"
@@ -60,15 +60,22 @@ def call_gemini_api(api_key, user_query) -> tuple[SoftwareEntity | None, ]:
     )
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash", contents=full_prompt, config=config
+        # Note: The genai library doesn't have native async support yet
+        # We'll run this in a thread pool to avoid blocking
+        import asyncio
+        loop = asyncio.get_event_loop()
+        response = await loop.run_in_executor(
+            None,
+            lambda: client.models.generate_content(
+                model="gemini-2.5-flash", contents=full_prompt, config=config
+            )
         )
 
         response_text = getattr(response, "text", None) or str(response)
         if "```json" in response_text:
             m = re.search(r"```json(.*?)```", response_text, re.S)
             if m:
-                response_text = m.group(1).strip()  
+                response_text = m.group(1).strip()
 
         try:
             parsed = json.loads(response_text)
@@ -90,11 +97,11 @@ def call_gemini_api(api_key, user_query) -> tuple[SoftwareEntity | None, ]:
             print("--- Raw API Response ---")
             print(response_text)
         return None
-    
-def detect_entity(text: str) -> SoftwareEntity | None:
+
+async def detect_entity(text: str) -> SoftwareEntity | None:
     """
     Detect software entity information using the Gemini API.
-    
+
     Args:
         text: Input text containing software details.
     Returns:
@@ -102,7 +109,7 @@ def detect_entity(text: str) -> SoftwareEntity | None:
     """
     api_key = get_gemini_api_key()
     user_query = f"Extract software entity information from the following text: {text}"
-    return call_gemini_api(api_key, user_query)
+    return await call_gemini_api(api_key, user_query)
 
 def software_types():
     return [
@@ -150,4 +157,6 @@ def software_types():
         "Geographic Information System (GIS) Software"
     ]
 if __name__ == "__main__":
-    print(detect_entity(input('Enter software name/vendor/process name: ')))
+    import asyncio
+    result = asyncio.run(detect_entity(input('Enter software name/vendor/process name: ')))
+    print(result)

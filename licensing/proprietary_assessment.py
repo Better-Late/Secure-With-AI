@@ -420,15 +420,7 @@ def _create_proprietary_assessment_prompt(legal_text: str, pricing_text: str) ->
     """Create prompt for AI assessment using legal and pricing context."""
     return f"""You are a legal expert analyzing software terms, privacy policies, and pricing.
 
-Analyze the following documents:
-
-## Legal/Terms Documents
-
-{legal_text[:8000] if legal_text else "No legal documents available"}
-
-## Pricing/Plans Documents
-
-{pricing_text[:7000] if pricing_text else "No pricing documents available"}
+You will have to analyze some legal and pricing documents.
 
 ## Your Task
 
@@ -450,6 +442,16 @@ Provide a JSON response with three assessments:
 - If information missing, state "Information not provided"
 - Be objective and factual
 - Do NOT use latex or markdown formatting - output plain text.
+
+## Legal/Terms Documents
+
+{legal_text[:8000] if legal_text else "No legal documents available"}
+
+## Pricing/Plans Documents
+
+{pricing_text[:7000] if pricing_text else "No pricing documents available"}
+
+
 """
 
 
@@ -539,6 +541,8 @@ async def assess_proprietary_software(website_url: str) -> Optional[ProprietaryA
         assessment = _parse_proprietary_assessment(response_text)
         assessment.legal_sources = legal_sources
         assessment.pricing_sources = pricing_sources
+
+        print(assessment)
 
         print("  ✓ Proprietary assessment complete")
         return assessment

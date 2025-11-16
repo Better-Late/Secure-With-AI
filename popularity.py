@@ -1,19 +1,26 @@
 from pytrends.request import TrendReq
+import asyncio
 
-def getPopularity(keyword: str) -> float:
-    pytrends = TrendReq(hl='en-US', tz=360)
-    pytrends.build_payload([keyword], timeframe='today 12-m')
+async def getPopularity(keyword: str) -> float:
+    # Run pytrends in executor since it doesn't have native async support
+    loop = asyncio.get_event_loop()
 
-    data = pytrends.interest_over_time()
+    def _get_popularity():
+        pytrends = TrendReq(hl='en-US', tz=360)
+        pytrends.build_payload([keyword], timeframe='today 12-m')
 
-    # Remove incomplete last row
-    data = data[data['isPartial'] == False]
+        data = pytrends.interest_over_time()
 
-    # Use last 2 full weeks/months
-    last_values = data[keyword].iloc[-2:] * 1.5
+        # Remove incomplete last row
+        data = data[data['isPartial'] == False]
 
-    return min(last_values.mean(), 100)
+        # Use last 2 full weeks/months
+        last_values = data[keyword].iloc[-2:] * 1.5
+
+        return min(last_values.mean(), 100)
+
+    return await loop.run_in_executor(None, _get_popularity)
 
 
 if __name__ == "__main__":
-    print(getPopularity("Tesla"))
+    print(asyncio.run(getPopularity("Tesla")))

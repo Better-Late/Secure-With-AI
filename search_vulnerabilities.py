@@ -37,8 +37,8 @@ class VulnerabilitySearchResult(BaseModel):
 
 
 
-import requests
-def resolve_vertex_redirect(url: str, timeout: float = 5.0) -> str:
+import aiohttp
+async def resolve_vertex_redirect(url: str, timeout: float = 5.0) -> str:
     """
     Try to resolve a vertexaisearch grounding-api-redirect URL
     to its final destination by following HTTP redirects.
@@ -48,17 +48,18 @@ def resolve_vertex_redirect(url: str, timeout: float = 5.0) -> str:
         return url
 
     try:
-        # HEAD is usually enough; use GET if the server doesn't support HEAD
-        resp = requests.get(url, allow_redirects=True, timeout=timeout)
-        return resp.url or url
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, allow_redirects=True, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+                return str(resp.url) or url
     except Exception:
         return url
 
 
 import base64
 import re
+import asyncio
 
-def decode_vertex_ai_redirect(url: str) -> str:
+async def decode_vertex_ai_redirect(url: str) -> str:
     """
     Attempt to decode a Google grounding-api-redirect link.
     Returns the original target URL if decoding succeeds,
@@ -69,7 +70,7 @@ def decode_vertex_ai_redirect(url: str) -> str:
     match = re.search(pattern, url)
 
     if not match:
-        return resolve_vertex_redirect(url)  # Not a redirect link
+        return await resolve_vertex_redirect(url)  # Not a redirect link
     encoded = match.group(1)
 
     # Convert to proper base64 padding
@@ -81,22 +82,30 @@ def decode_vertex_ai_redirect(url: str) -> str:
         decoded_str = decoded.decode("utf-8")
         return decoded_str
     except Exception:
-        return resolve_vertex_redirect(url)  # Failed to decode → return original
+        return await resolve_vertex_redirect(url)  # Failed to decode → return original
 
 
 
-def decode_all_urls(findings: VulnerabilitySearchResult):
+async def decode_all_urls(findings: VulnerabilitySearchResult):
+  # Decode all URLs in parallel
+  tasks = []
   for v in findings.results:
     if v.source_url:
-        v.source_url = decode_vertex_ai_redirect(v.source_url)
-        if "vertexaisearch.cloud.google.com/grounding-api-redirect" in v.source_url: 
+        tasks.append((v, decode_vertex_ai_redirect(v.source_url)))
+
+  # Wait for all decoding tasks to complete
+  for v, task in tasks:
+      decoded_url = await task
+      v.source_url = decoded_url
+      if "vertexaisearch.cloud.google.com/grounding-api-redirect" in v.source_url:
           v.source_url = "Source Not Verfied"
+
   return findings
 # -----------------------------------------------------
 # Gemini Search Function
 # -----------------------------------------------------
 
-def search_vulnerabilities_structured(product_name: str):
+async def search_vulnerabilities_structured(product_name: str):
 
     client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
 
@@ -124,7 +133,7 @@ def search_vulnerabilities_structured(product_name: str):
 
 
     Requirements:
-    - Use web search and then browse promising pages.  
+    - Use web search and then browse promising pages.
     - Extract all relevant vulnerabilities.
     - If a CVE exists, include it. If not, leave cve_id null.
     - Only return real, verified vulnerabilities. No fabrications.
@@ -144,14 +153,19 @@ def search_vulnerabilities_structured(product_name: str):
     )
 
     # Gemini call with forced structured output
-    chat = client.chats.create(
-        model="gemini-2.5-flash",
-        config= config,
+    # Run in executor since genai doesn't have native async support
+    loop = asyncio.get_event_loop()
+    chat = await loop.run_in_executor(
+        None,
+        lambda: client.chats.create(
+            model="gemini-2.5-flash",
+            config=config,
         )
+    )
 
-    response = chat.send_message(prompt)
+    response = await loop.run_in_executor(None, lambda: chat.send_message(prompt))
     retries = 0
-    
+
     result = None
     while (retries<3):
       try:
@@ -162,9 +176,9 @@ def search_vulnerabilities_structured(product_name: str):
       except Exception as e:
         retries+=1
         result = None
-        response = chat.send_message(f"Error during parsing (make sure it is a valid json): str(e)")
+        response = await loop.run_in_executor(None, lambda: chat.send_message(f"Error during parsing (make sure it is a valid json): str(e)"))
 
-    return decode_all_urls(result) if result else None
+    return await decode_all_urls(result) if result else None
 
 
 # -----------------------------------------------------
@@ -174,7 +188,7 @@ def search_vulnerabilities_structured(product_name: str):
 if __name__ == "__main__":
     product = "OneStart"
 
-    findings = search_vulnerabilities_structured(product)
+    findings = asyncio.run(search_vulnerabilities_structured(product))
 
     print(findings.model_dump_json(indent=4))
 

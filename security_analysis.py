@@ -12,6 +12,7 @@ from gdpr import gdpr_search
 from html import unescape
 import re
 import pandas as pd
+import asyncio
 
 import os
 from dotenv import load_dotenv
@@ -21,23 +22,23 @@ class AnalysisResult(Dict[str, any]):
     score: int
 
 
-def calculate_security_score(
+async def calculate_security_score(
     product_name: str,
     vulnerabilities: Optional[VulnerabilitySearchResult] = None,
     hash_value: Optional[str] = None,
     isGdprFined = False
-    ): 
+    ):
     """
     Calculate overall security score based on:
     - Popularity score (0-100)
     - CVE score from vulnerabilities (0-100)
     - VirusTotal assessment (if hash provided)
-    
+
     Args:
         product_name: Name of the product for popularity lookup
         vulnerabilities: Vulnerability search results
         hash_value: Optional hash for VirusTotal analysis
-    
+
     Returns:
         Overall security score (0-100)
     """
@@ -47,14 +48,14 @@ def calculate_security_score(
 
     gdpr_penalty = 10 if isGdprFined else 0
     calculated_score_breakdown["GDPR Penalty"] = gdpr_penalty
-    
+
     # Get popularity score
     try:
-        popularity_score = getPopularity(product_name)
+        popularity_score = await getPopularity(product_name)
     except Exception as e:
         print(f"Warning: Could not get popularity score: {e}")
         popularity_score = 50.0  # Default to medium popularity
-    
+
     # Get CVE score from vulnerabilities
     if vulnerabilities:
         cve_score = getCveScore(vulnerabilities)
@@ -62,31 +63,31 @@ def calculate_security_score(
         cve_score = 100.0  # No vulnerabilities = perfect score
 
     calculated_score_breakdown["CVE Score"] = cve_score
-    
+
     print(f"Popularity Score: {popularity_score}, CVE Score: {cve_score}")
 
     # Calculate reputation score (combines popularity and CVE)
     reputation_score = getReputationScore(popularity_score, cve_score)
     calculated_score_breakdown['Reputation Score'] = reputation_score
-    
+
     # If hash is provided, factor in VirusTotal results
     if hash_value:
         try:
-            vt_assessment = get_parse_hashfile_assesment(hash_value)
-            
+            vt_assessment = await get_parse_hashfile_assesment(hash_value)
+
             # Calculate VirusTotal score based on detection ratio
-            total_scans = (vt_assessment.detection.malicious + 
-                          vt_assessment.detection.suspicious + 
-                          vt_assessment.detection.undetected + 
+            total_scans = (vt_assessment.detection.malicious +
+                          vt_assessment.detection.suspicious +
+                          vt_assessment.detection.undetected +
                           vt_assessment.detection.harmless)
-            
+
             if total_scans > 0:
-                malicious_ratio = (vt_assessment.detection.malicious + 
+                malicious_ratio = (vt_assessment.detection.malicious +
                                   vt_assessment.detection.suspicious) / total_scans
                 vt_score = (1 - malicious_ratio) * 100  # Invert so higher is better
             else:
                 vt_score = 50.0  # Unknown
-            
+
             calculated_score_breakdown["VT Score"] = vt_score
             # Combine scores: 50% reputation, 50% VirusTotal
             final_score = (reputation_score * 0.5) + (vt_score * 0.5)
@@ -96,7 +97,7 @@ def calculate_security_score(
     else:
         # No hash provided, use reputation score only
         final_score = reputation_score
-    
+
     return round(max(0.0, min(100.0, final_score)), 2) - gdpr_penalty, calculated_score_breakdown
 
 
@@ -130,7 +131,7 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
 
     print("detecting entity...")
     # Perform actual analysis
-    product_entity = detect_entity(f"{company_name} {product_name}")
+    product_entity = await detect_entity(f"{company_name} {product_name}")
 
     print("detected entiy:", product_entity)
     # Handle case when entity detection fails
@@ -141,11 +142,13 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
 
     hash_info = f"\n**Hash:** `{hash_value}`" if hash_value else ""
 
-    #GDPR
-    gdpr_section, isFined = create_gdpr_fines(product_entity.vendor)
+    # Run GDPR and Data Breach checks in parallel
+    gdpr_task = create_gdpr_fines(product_entity.vendor)
+    breach_task = create_data_breach_section(product_entity.vendor)
 
-    # Data Breaches
-    breach_section, hasBreaches = create_data_breach_section(product_entity.vendor)
+    (gdpr_section, isFined), (breach_section, hasBreaches) = await asyncio.gather(
+        gdpr_task, breach_task
+    )
 
     vt_section = ""
     license_info = None
@@ -163,48 +166,109 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
         # Note: breach_section and gdpr_section are already set above
     else:
         malware_warning = ""
+
+        # Prepare all async tasks
+        tasks = []
+        task_names = []
+
+        # VirusTotal task (if hash provided)
         if hash_value and hash_value.strip():
-            try:
-                vt_assessment = get_parse_hashfile_assesment(hash_value.strip())
-                vt_section = create_virustotal_section(vt_assessment)
-            except Exception as e:
-                vt_section = f"#### VirusTotal Lookup\n\n❌ **Error fetching VirusTotal data:** {str(e)}\n"
+            tasks.append(get_parse_hashfile_assesment(hash_value.strip()))
+            task_names.append('vt')
+
+        # Vulnerability search task
+        print("searching vulnerabilities...")
+        vuln_search_key = (product_entity.vendor or '') + ' ' + (product_entity.full_name or '')
+        tasks.append(search_vulnerabilities_structured(vuln_search_key))
+        task_names.append('vulnerabilities')
+
+        # Alternatives search task
+        tasks.append(search_alternatives(product_entity.full_name))
+        task_names.append('alternatives')
+
+        # License tasks - fetch BOTH GitHub and website licenses in parallel for open-source
+        if is_open_source(product_entity):
+            # For open-source, fetch both GitHub license and website pricing/terms in parallel
+            tasks.append(get_license_opensource(product_entity.github_link))
+            task_names.append('license_github')
+            if product_entity.website:
+                tasks.append(get_license_closed_source(product_entity.website, product_entity.full_name))
+                task_names.append('license_website')
+        else:
+            # For closed-source, just fetch website license
+            if product_entity.website:
+                tasks.append(get_license_closed_source(product_entity.website, product_entity.full_name))
+                task_names.append('license_closed')
+
+        # Execute all tasks in parallel
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+
+        # Process results
+        result_dict = dict(zip(task_names, results))
+
+        # Process VirusTotal result
+        if 'vt' in result_dict:
+            if isinstance(result_dict['vt'], Exception):
+                vt_section = f"#### VirusTotal Lookup\n\n❌ **Error fetching VirusTotal data:** {str(result_dict['vt'])}\n"
+            else:
+                vt_section = create_virustotal_section(result_dict['vt'])
         else:
             # No hash provided
             vt_section = create_virustotal_section(None)
 
-        print("searching vulnerabilities...")
-        vulnerabilities = search_vulnerabilities_structured((product_entity.vendor or '') + ' ' + (product_entity.full_name or ''))
+        # Process vulnerabilities result
+        vulnerabilities = result_dict.get('vulnerabilities')
+        if isinstance(vulnerabilities, Exception):
+            print(f"Warning: Error searching vulnerabilities: {vulnerabilities}")
+            vulnerabilities = None
         print("found vulnerabilities:", vulnerabilities)
         vulnerability_section = create_vulnerability_section(vulnerabilities)
 
-        alternatives = search_alternatives(product_entity.full_name)
+        # Process alternatives result
+        alternatives = result_dict.get('alternatives')
+        if isinstance(alternatives, Exception):
+            print(f"Warning: Error searching alternatives: {alternatives}")
+            alternatives = []
         alternative_section = create_alternative_section(alternatives)
 
-        if is_open_source(product_entity):
-            # Try to get license from GitHub
-            license_info = await get_license_opensource(product_entity.github_link)
+        # Process license result - merge GitHub and website licenses if both were fetched
+        license_info = None
+        if 'license_github' in result_dict:
+            github_license = result_dict.get('license_github')
+            if isinstance(github_license, Exception):
+                print(f"Warning: Error getting GitHub license: {github_license}")
+                github_license = None
 
-            if license_info is None:
-                # GitHub license not found, treat as proprietary software
-                if product_entity.website:
-                    license_info = await get_license_closed_source(product_entity.website, product_entity.full_name)
+            if 'license_website' in result_dict:
+                # Both GitHub and website licenses were fetched in parallel
+                website_license = result_dict.get('license_website')
+                if isinstance(website_license, Exception):
+                    print(f"Warning: Error getting website license: {website_license}")
+                    website_license = None
+
+                if github_license is not None:
+                    # Use GitHub license as base, merge pricing info from website
+                    license_info = github_license
+                    if website_license and website_license.is_free:
+                        license_info.is_free = website_license.is_free
+                elif website_license is not None:
+                    # GitHub license failed, use website license
+                    license_info = website_license
             else:
-                # GitHub license found, also analyze website for pricing/free info
-                if product_entity.website:
-                    try:
-                        website_license = await get_license_closed_source(product_entity.website, product_entity.full_name)
-                        # Merge is_free field from website analysis
-                        if website_license and website_license.is_free:
-                            license_info.is_free = website_license.is_free
-                    except Exception as e:
-                        print(f"Warning: Could not fetch website license info: {e}")
-        else:
-            license_info = await get_license_closed_source(product_entity.website, product_entity.full_name)
+                # Only GitHub license was requested
+                license_info = github_license
+
+        elif 'license_closed' in result_dict:
+            # Closed-source software
+            license_info = result_dict.get('license_closed')
+            if isinstance(license_info, Exception):
+                print(f"Warning: Error getting closed source license: {license_info}")
+                license_info = None
+
         license_section = create_license_section(license_info)
 
         # Calculate security score
-        calculated_score, calculated_score_breakdown = calculate_security_score(
+        calculated_score, calculated_score_breakdown = await calculate_security_score(
             product_name=product_entity.full_name,
             vulnerabilities=vulnerabilities,
             hash_value=hash_value,
@@ -485,7 +549,7 @@ Please try again with corrected information or contact support for manual analys
 
 
 
-def create_gdpr_fines(company_name: str):
+async def create_gdpr_fines(company_name: str):
     """
     Create a markdown section summarizing GDPR fines against a company.
     Uses the results returned by gdpr_search().
@@ -500,7 +564,7 @@ def create_gdpr_fines(company_name: str):
         return re.sub(r'<[^>]+>', '', text).strip()
 
     try:
-        df = gdpr_search(company_name)
+        df = await gdpr_search(company_name)
     except Exception as e:
         return f"#### GDPR Fines\n\nCould not retrieve GDPR data: {e}", False
 
@@ -545,7 +609,7 @@ def create_gdpr_fines(company_name: str):
     return md, True
 
 
-def create_data_breach_section(company_name: str):
+async def create_data_breach_section(company_name: str):
     """
     Create a markdown section summarizing known data breaches for a company.
     Searches the breaches.csv file for matching entities.
@@ -556,43 +620,49 @@ def create_data_breach_section(company_name: str):
     Returns:
         tuple: (markdown_string, has_breaches_bool)
     """
-    try:
-        # Read the CSV file
-        df = pd.read_csv('breaches.csv')
-    except FileNotFoundError:
-        return "#### Data Breaches\n\nCould not find breaches.csv file.", False
-    except Exception as e:
-        return f"#### Data Breaches\n\nError reading breach data: {e}", False
+    # Run file I/O in executor to avoid blocking
+    loop = asyncio.get_event_loop()
 
-    if df.empty:
-        return "#### Data Breaches\n\nNo breach data available.", False
+    def _read_and_filter_breaches():
+        try:
+            # Read the CSV file
+            df = pd.read_csv('breaches.csv')
+        except FileNotFoundError:
+            return "#### Data Breaches\n\nCould not find breaches.csv file.", False
+        except Exception as e:
+            return f"#### Data Breaches\n\nError reading breach data: {e}", False
 
-    # Search for company name in the breach database
-    # Match against the 'name' column (domain names)
-    company_lower = company_name.lower()
+        if df.empty:
+            return "#### Data Breaches\n\nNo breach data available.", False
 
-    # Filter rows where the company name appears in the domain name
-    matches = df[df['name'].str.lower().str.contains(company_lower, na=False, regex=False)]
+        # Search for company name in the breach database
+        # Match against the 'name' column (domain names)
+        company_lower = company_name.lower()
 
-    if matches.empty:
-        return f"#### Data Breaches\n\nNo known data breaches found for **{company_name}**.", False
+        # Filter rows where the company name appears in the domain name
+        matches = df[df['name'].str.lower().str.contains(company_lower, na=False, regex=False)]
 
-    # Build markdown table
-    md = "#### Data Breaches\n\n"
-    md += f"Found **{len(matches)}** known data breach(es) associated with **{company_name}**.\n\n"
-    md += "| Entity Name | Date | Breach Link |\n"
-    md += "|-------------|------|-------------|\n"
+        if matches.empty:
+            return f"#### Data Breaches\n\nNo known data breaches found for **{company_name}**.", False
 
-    for _, row in matches.iterrows():
-        entity_name = row['name']
-        year = row['year']
-        month = row['month'].capitalize() if pd.notna(row['month']) else 'Unknown'
-        date_str = f"{month} {year}"
-        url = row['url']
+        # Build markdown table
+        md = "#### Data Breaches\n\n"
+        md += f"Found **{len(matches)}** known data breach(es) associated with **{company_name}**.\n\n"
+        md += "| Entity Name | Date | Breach Link |\n"
+        md += "|-------------|------|-------------|\n"
 
-        md += f"| {entity_name} | {date_str} | [Link]({url}) |\n"
+        for _, row in matches.iterrows():
+            entity_name = row['name']
+            year = row['year']
+            month = row['month'].capitalize() if pd.notna(row['month']) else 'Unknown'
+            date_str = f"{month} {year}"
+            url = row['url']
 
-    return md, True
+            md += f"| {entity_name} | {date_str} | [Link]({url}) |\n"
+
+        return md, True
+
+    return await loop.run_in_executor(None, _read_and_filter_breaches)
 
 
 

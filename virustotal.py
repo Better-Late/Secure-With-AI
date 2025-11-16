@@ -1,13 +1,15 @@
-import requests,os
+import aiohttp
+import os
+import asyncio
 
-def getInfoFromHash(shash:str):
+async def getInfoFromHash(shash: str):
   all_url = "https://www.virustotal.com/api/v3/search?query="
 
   headers = {"accept": "application/json", "x-apikey" : os.environ['VIRUSTOTAL_API_KEY']}
 
-  response = requests.get(all_url + shash, headers=headers)
-
-  return response
+  async with aiohttp.ClientSession() as session:
+      async with session.get(all_url + shash, headers=headers) as response:
+          return await response.json()
 
 
 from typing import List, Optional
@@ -100,18 +102,20 @@ class FileAssessment(BaseModel):
 from google import genai
 from google.genai.types import GenerateContentConfig
 
-def get_parse_hashfile_assesmentAI(shash:str):
+async def get_parse_hashfile_assesmentAI(shash: str):
 
     client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
 
-    assesment = getInfoFromHash(shash).text
+    assesment_data = await getInfoFromHash(shash)
+    import json
+    assesment = json.dumps(assesment_data)
 
     prompt = f"""
     You are a cybersecurity analyst.
 
     TASK:
     Parse the following file assesment and return a structered json.
-    
+
 
     Assesment: {assesment}
 
@@ -127,21 +131,26 @@ def get_parse_hashfile_assesmentAI(shash:str):
     )
 
     # Gemini call with forced structured output
-
-    chat = client.chats.create(
-        model="gemini-2.5-flash",
-        config= config,
+    # Run in executor since genai doesn't have native async support
+    loop = asyncio.get_event_loop()
+    chat = await loop.run_in_executor(
+        None,
+        lambda: client.chats.create(
+            model="gemini-2.5-flash",
+            config=config,
+        )
     )
 
-    response = chat.send_message(prompt)
+    response = await loop.run_in_executor(None, lambda: chat.send_message(prompt))
 
     return FileAssessment.model_validate_json(response.text)
 
 
 
 
-def get_parse_hashfile_assesment(shash: str) -> FileAssessment:
-    data = getInfoFromHash(shash).json()["data"][0]["attributes"]
+async def get_parse_hashfile_assesment(shash: str) -> FileAssessment:
+    response_data = await getInfoFromHash(shash)
+    data = response_data["data"][0]["attributes"]
 
     # ---- Identification ----
     sha256 = data.get("sha256")
@@ -261,11 +270,16 @@ def get_parse_hashfile_assesment(shash: str) -> FileAssessment:
 # -----------------------------------------------------
 
 if __name__ == "__main__":
-    shash = "37121618e735ebf628f7ba6ce29afc251ed88503"
-    print(getInfoFromHash(shash).text)
+    async def main():
+        shash = "37121618e735ebf628f7ba6ce29afc251ed88503"
+        info = await getInfoFromHash(shash)
+        import json
+        print(json.dumps(info, indent=2))
 
-    findings = get_parse_hashfile_assesment(shash)
+        findings = await get_parse_hashfile_assesment(shash)
 
-    print(findings.model_dump_json(indent=4))
+        print(findings.model_dump_json(indent=4))
+
+    asyncio.run(main())
 
 

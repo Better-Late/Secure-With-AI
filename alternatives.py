@@ -7,11 +7,12 @@ from entity_resolution import SoftwareEntity
 from typing import List
 import os
 
-def search_alternatives(product: str) -> List[SoftwareEntity]:
+async def search_alternatives(product: str) -> List[SoftwareEntity]:
+    import asyncio
     api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         raise ValueError("GGEMINI_API_KEY environment variable not set.")
-    
+
     client = genai.Client()
     model_id = "gemini-2.5-flash"
 
@@ -19,17 +20,23 @@ def search_alternatives(product: str) -> List[SoftwareEntity]:
         {"url_context": {}},
         {"google_search": {}},
     ]
-    response = client.models.generate_content(
-        model=model_id,
-        contents=f"List 5 popular alternatives to the software product '{product}'." 
-        " Use https://european-alternatives.eu, https://alternativeto.net/, and https://www.opensourcealternative.to/."
-        " For each alternative, provide the full name, vendor, website, github link (if available), and a brief description. "
-        " Produce a JSON list with objects containing the fields: full_name, vendor, website, github_link, description. "
-        " Use google search if needed to find the details of the software product."
-        " Return only directly relevant alternatives."
-        " If some value is unknown, use null. Do not include explanatory text or markdown.",
-        config=GenerateContentConfig(
-            tools=tools,
+
+    # Run Gemini API call in executor
+    loop = asyncio.get_event_loop()
+    response = await loop.run_in_executor(
+        None,
+        lambda: client.models.generate_content(
+            model=model_id,
+            contents=f"List 5 popular alternatives to the software product '{product}'."
+            " Use https://european-alternatives.eu, https://alternativeto.net/, and https://www.opensourcealternative.to/."
+            " For each alternative, provide the full name, vendor, website, github link (if available), and a brief description. "
+            " Produce a JSON list with objects containing the fields: full_name, vendor, website, github_link, description. "
+            " Use google search if needed to find the details of the software product."
+            " Return only directly relevant alternatives."
+            " If some value is unknown, use null. Do not include explanatory text or markdown.",
+            config=GenerateContentConfig(
+                tools=tools,
+            )
         )
     )
 
@@ -39,7 +46,7 @@ def search_alternatives(product: str) -> List[SoftwareEntity]:
         if "```json" in part:
             m = re.search(r"```json(.*?)```", part, re.S)
             if m:
-                part = m.group(1).strip()  
+                part = m.group(1).strip()
 
         try:
             entity_data = json.loads(part)
@@ -58,11 +65,13 @@ def search_alternatives(product: str) -> List[SoftwareEntity]:
     return alternatives
 
 
-def main():
+async def main():
+    import asyncio
     product = "Microsoft VS code"
-    alternatives = search_alternatives(product)
+    alternatives = await search_alternatives(product)
     for alt in alternatives:
         print(f"Name: {alt.full_name}, Vendor: {alt.vendor}, Website: {alt.website}, Description: {alt.description}")
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
