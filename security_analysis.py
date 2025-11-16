@@ -159,7 +159,23 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
         alternative_section = create_alternative_section(alternatives)
 
         if is_open_source(product_entity):
+            # Try to get license from GitHub
             license_info = await get_license_opensource(product_entity.github_link)
+
+            if license_info is None:
+                # GitHub license not found, treat as proprietary software
+                if product_entity.website:
+                    license_info = await get_license_closed_source(product_entity.website, product_entity.full_name)
+            else:
+                # GitHub license found, also analyze website for pricing/free info
+                if product_entity.website:
+                    try:
+                        website_license = await get_license_closed_source(product_entity.website, product_entity.full_name)
+                        # Merge is_free field from website analysis
+                        if website_license and website_license.is_free:
+                            license_info.is_free = website_license.is_free
+                    except Exception as e:
+                        print(f"Warning: Could not fetch website license info: {e}")
         else:
             license_info = await get_license_closed_source(product_entity.website, product_entity.full_name)
         license_section = create_license_section(license_info)
