@@ -38,68 +38,55 @@ class VulnerabilitySearchResult(BaseModel):
 
 
 import aiohttp
-async def resolve_vertex_redirect(url: str, timeout: float = 5.0) -> str:
-    """
-    Try to resolve a vertexaisearch grounding-api-redirect URL
-    to its final destination by following HTTP redirects.
-    If anything fails, return the original URL.
-    """
-    if "vertexaisearch.cloud.google.com/grounding-api-redirect" not in url:
-        return url
-
-    try:
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, allow_redirects=True, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
-                return str(resp.url) or url
-    except Exception:
-        return url
-
-
-import base64
-import re
 import asyncio
 
-async def decode_vertex_ai_redirect(url: str) -> str:
+async def validate_cve_on_nvd(cve_id: str, timeout: float = 10.0) -> bool:
     """
-    Attempt to decode a Google grounding-api-redirect link.
-    Returns the original target URL if decoding succeeds,
-    otherwise returns the original URL unchanged.
+    Check if a CVE exists on the NVD database by attempting to access its detail page.
+    Returns True if the CVE exists (HTTP 200), False otherwise (404 or any error).
     """
-
-    pattern = r"grounding-api-redirect/([^/?#]+)"
-    match = re.search(pattern, url)
-
-    if not match:
-        return await resolve_vertex_redirect(url)  # Not a redirect link
-    encoded = match.group(1)
-
-    # Convert to proper base64 padding
-    padding = '=' * (-len(encoded) % 4)
-    encoded += padding
-
+    if not cve_id:
+        return False
+    
+    nvd_url = f"https://nvd.nist.gov/vuln/detail/{cve_id}"
+    
     try:
-        decoded = base64.urlsafe_b64decode(encoded.encode("utf-8"))
-        decoded_str = decoded.decode("utf-8")
-        return decoded_str
+        async with aiohttp.ClientSession() as session:
+            async with session.get(nvd_url, timeout=aiohttp.ClientTimeout(total=timeout)) as resp:
+                return resp.status == 200
     except Exception:
-        return await resolve_vertex_redirect(url)  # Failed to decode → return original
+        return False
+
 
 
 
 async def decode_all_urls(findings: VulnerabilitySearchResult):
-  # Decode all URLs in parallel
-  tasks = []
+  # Validate CVEs against NVD first and update source URLs
+  validation_tasks = []
   for v in findings.results:
-    if v.source_url:
-        tasks.append((v, decode_vertex_ai_redirect(v.source_url)))
-
-  # Wait for all decoding tasks to complete
-  for v, task in tasks:
-      decoded_url = await task
-      v.source_url = decoded_url
-      if "vertexaisearch.cloud.google.com/grounding-api-redirect" in v.source_url:
-          v.source_url = "Source Not Verfied"
-
+      if v.cve_id:
+          validation_tasks.append((v, validate_cve_on_nvd(v.cve_id)))
+  
+  # Filter vulnerabilities: only keep those with valid CVE IDs that exist on NVD
+  valid_vulnerabilities = []
+  for v in findings.results:
+      # Skip vulnerabilities without CVE IDs - they don't have NVD links
+      if not v.cve_id:
+          continue
+      
+      # Find the corresponding validation task
+      cve_valid = False
+      for vuln, task in validation_tasks:
+          if vuln is v:
+              cve_valid = await task
+              break
+      
+      # Only include if CVE is valid on NVD, and replace source with NVD URL
+      if cve_valid:
+          v.source_url = f"https://nvd.nist.gov/vuln/detail/{v.cve_id}"
+          valid_vulnerabilities.append(v)
+  
+  findings.results = valid_vulnerabilities
   return findings
 # -----------------------------------------------------
 # Gemini Search Function
