@@ -26,7 +26,8 @@ async def calculate_security_score(
     product_name: str,
     vulnerabilities: Optional[VulnerabilitySearchResult] = None,
     hash_value: Optional[str] = None,
-    isGdprFined = False
+    isGdprFined = False,
+    hasBreaches = False
     ):
     """
     Calculate overall security score based on:
@@ -48,7 +49,10 @@ async def calculate_security_score(
 
     gdpr_penalty = 10 if isGdprFined else 0
     calculated_score_breakdown["GDPR Penalty"] = gdpr_penalty
-
+    
+    breach_penalty = 10 if hasBreaches else 0
+    calculated_score_breakdown["Breaches Penalty"] = breach_penalty
+    
     # Get popularity score
     try:
         popularity_score = await getPopularity(product_name)
@@ -98,7 +102,7 @@ async def calculate_security_score(
         # No hash provided, use reputation score only
         final_score = reputation_score
 
-    return round(max(0.0, min(100.0, final_score)), 2) - gdpr_penalty, calculated_score_breakdown
+    return round(max(0.0, min(100.0, final_score)), 2) - gdpr_penalty - breach_penalty, calculated_score_breakdown
 
 
 # Global cache instance using diskcache
@@ -209,6 +213,7 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
         result_dict = dict(zip(task_names, results))
 
         # Process GDPR result
+        isFined = False
         if 'gdpr' in result_dict:
             gdpr_result = result_dict['gdpr']
             if isinstance(gdpr_result, Exception):
@@ -219,13 +224,14 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
                 gdpr_section, isFined = gdpr_result
 
         # Process breach result
+        isBreach=False
         if 'breach' in result_dict:
             breach_result = result_dict['breach']
             if isinstance(breach_result, Exception):
                 print(f"Warning: Error getting breach data: {breach_result}")
                 breach_section = "#### Data Breaches\n\nCould not retrieve breach data."
             else:
-                breach_section, _ = breach_result
+                breach_section, isBreach = breach_result
 
         # Process VirusTotal result
         if 'vt' in result_dict:
@@ -293,7 +299,8 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
             product_name=product_entity.full_name,
             vulnerabilities=vulnerabilities,
             hash_value=hash_value,
-            isGdprFined=isFined
+            isGdprFined=isFined,
+            hasBreaches=isBreach,
         )
     
 

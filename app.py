@@ -230,6 +230,9 @@ $$
 * **GDPR Penalty:**  
   Up to **10 points** may be subtracted if the company has recorded enforcement actions in the GDPR Enforcement Tracker.
 
+* **Data Breach Penalty:**  
+  Up to **10 points** may be subtracted if the company has had data breaches in the past.
+
 Finally:
 
 * The score is **clamped between 0 and 100**  
@@ -246,6 +249,7 @@ If VirusTotal marks the file as malware:
 * No other calculations are performed
 
 ---
+
 """
 )
 
