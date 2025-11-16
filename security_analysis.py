@@ -176,10 +176,13 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
 
 
 
+    # Add GitHub link if available
+    github_link = f" [![GitHub](:material/github:)]({product_entity.github_link})" if product_entity.github_link else ""
+
     result = {
         'score': calculated_score,
         'summary': f"""
-### Security Analysis for: [{product_entity.full_name}]({product_entity.website}) - {product_entity.vendor or ''}{hash_info}
+### Security Analysis for: [{product_entity.full_name}]({product_entity.website}) - {product_entity.vendor or ''}{github_link}{hash_info}
 
 #### Overview
 {product_entity.description or "No description available."}
@@ -218,7 +221,7 @@ def create_vulnerability_section(vulnerabilities: VulnerabilitySearchResult) -> 
     """
     Create a markdown section summarizing vulnerabilities.
     """
-    if not vulnerabilities.results:
+    if not vulnerabilities or not vulnerabilities.results:
         return "No known vulnerabilities found."
 
     md = "#### Vulnerabilities Detected\n\n"
