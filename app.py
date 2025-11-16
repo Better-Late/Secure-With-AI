@@ -99,6 +99,18 @@ def render_analyze_all_button():
     st.markdown("---")  # Compact separator
 
 
+
+
+@st.dialog("Score Calculation")
+def score_dialog():
+    st.markdown("""
+    ## 📘 Formulas
+
+    - Add any detailed documentation here  
+    - kadnjasda
+    """)
+
+
 def render_sidebar():
     """Render the sidebar with settings and controls."""
     with st.sidebar:
@@ -149,18 +161,40 @@ def render_results(i: int, stored_company: str, stored_product: str, stored_hash
     # Display security score with colored indicator
     score = result['score']
     score_color = get_score_color(score)
-    
+    breakdown = result.get("score_breakdown", {})
     col_score, col_summary = st.columns([1, 4])
     
     with col_score:
-        st.markdown(f"""
-        <div style="text-align: center; padding: 20px; background-color: {score_color}; 
-                    border-radius: 10px; color: white;">
-            <h1 style="margin: 0; color: white;">{score}</h1>
-            <p style="margin: 0; color: white;">Security Score</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
+        breakdown_items = ""
+        for name, value in breakdown.items():
+            breakdown_items += (
+                f"<div style='font-size: 12px; margin-top: 4px;'>"
+                f"<strong>{name}:</strong> {value}"
+                f"</div>"
+            )
+
+        html = (
+            f"<div style='text-align: center; padding: 20px; "
+            f"background-color: {score_color}; border-radius: 12px; color: white;'>"
+            f"<h1 style='margin: 0; color: white;'>{score}</h1>"
+            f"<p style='margin: 0; color: white;'>Security Score</p>"
+            f"<div style='margin-top: 10px;'>{breakdown_items}</div>"
+            f"</div>"
+        )
+
+        st.markdown(html, unsafe_allow_html=True)
+
+        # st.markdown(f"""
+        # <div style="text-align: center; padding: 20px; background-color: {score_color}; 
+        #             border-radius: 10px; color: white;">
+        #     <h1 style="margin: 0; color: white;">{score}</h1>
+        #     <p style="margin: 0; color: white;">Security Score</p>
+        # </div>
+        # """, unsafe_allow_html=True)
+
+        if st.button("ℹ️ What does this score mean?", key=f"score_info_btn_{score}", width="stretch"):
+            score_dialog()
+
     with col_summary:
         # Display summary in an expander
         with st.expander("📋 View Full Summary", expanded=True):

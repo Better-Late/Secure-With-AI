@@ -10,12 +10,10 @@ def getPopularity(keyword: str) -> float:
     data = data[data['isPartial'] == False]
 
     # Use last 2 full weeks/months
-    last_values = data[keyword].iloc[-2:]
+    last_values = data[keyword].iloc[-2:] * 1.5
 
-    return last_values.mean()
+    return min(last_values.mean(), 100)
 
 
 if __name__ == "__main__":
     print(getPopularity("Tesla"))
-
-
