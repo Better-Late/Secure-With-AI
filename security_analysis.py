@@ -181,9 +181,6 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
         if hash_value and hash_value.strip():
             tasks.append(get_parse_hashfile_assesment(hash_value.strip()))
             task_names.append('vt')
-        elif product_name:
-            tasks.append(get_parse_hashfile_assesment(product_name.strip()))
-            task_names.append('vt')
 
         # Vulnerability search task
         print("searching vulnerabilities...")
