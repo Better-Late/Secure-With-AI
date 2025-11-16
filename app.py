@@ -268,7 +268,7 @@ def render_results(i: int, stored_company: str, stored_product: str, stored_hash
             f"<div class='score-card' style='background: {score_color}; "
             f"border-radius: 16px; padding: 28px; text-align: center; "
             f"box-shadow: 0 8px 24px rgba(0,0,0,0.3);'>"
-            f"<h1 style='margin: 0; color: white; font-size: 3.5rem; font-weight: 700;'>{score}</h1>"
+            f"<h1 style='margin: 0; color: white; font-size: 3.5rem; font-weight: 700;'>{score:.0f}</h1>"
             f"<p style='margin: 8px 0 0 0; color: white; font-size: 0.9rem; font-weight: 600; letter-spacing: 1px;'>SECURITY SCORE</p>"
             f"<div style='margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.2);'>{breakdown_items}</div>"
             f"</div>"
