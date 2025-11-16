@@ -181,6 +181,9 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
         if hash_value and hash_value.strip():
             tasks.append(get_parse_hashfile_assesment(hash_value.strip()))
             task_names.append('vt')
+        elif product_name:
+            tasks.append(get_parse_hashfile_assesment(product_name.strip()))
+            task_names.append('vt')
 
         # Vulnerability search task
         print("searching vulnerabilities...")
@@ -308,14 +311,18 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
 
 
     # Add GitHub link if available
-    github_link = f" [![GitHub](:material/github:)]({product_entity.github_link})" if product_entity.github_link else ""
+    github_link = f"[GitHub]({product_entity.github_link})" if product_entity.github_link else ""
+
+    # Generate trust summary based on score and license
+    trust_summary = generate_trust_summary(calculated_score, license_info)
 
     result = {
         'score_breakdown': calculated_score_breakdown,
         'score': calculated_score,
         'license': license_info,
+        'trust_summary': trust_summary,
         'summary': f"""
-### Security Analysis for: [{product_entity.full_name}]({product_entity.website}) - {product_entity.vendor or ''}{github_link}{hash_info}
+### Security Analysis for: [{product_entity.full_name}]({product_entity.website}) - {product_entity.vendor or ''}  {github_link}{hash_info}
 
 #### Overview
 {product_entity.description or "No description available."}
@@ -532,9 +539,12 @@ def render_analysis_not_found(company_name: str, product_name: str, hash_value: 
     # Include hash in summary if available
     hash_info = f"\n**Hash:** `{hash_value}`" if hash_value else ""
     
+    trust_summary = generate_trust_summary(0, None)
+    
     result = {
         'score': 0,
         'license': None,
+        'trust_summary': trust_summary,
         'summary': f"""
 ### Security Analysis for: {company_name} - {product_name}{hash_info}
 
@@ -728,3 +738,24 @@ def create_license_section(license: Optional[License]) -> str:
         md += "</details>\n"
 
     return md
+
+
+def generate_trust_summary(score: float, license_info: Optional[License]) -> str:
+    """
+    Generate a trust summary based on the security score and license information.
+    
+    Args:
+        score: Trust score (0-100)
+        license_info: License information object
+        
+    Returns:
+        A summary string indicating the trust level
+    """
+    if score >= 0 and score <= 30:
+        return "Likely malware - don't download!"
+    elif score < 70:
+        return "Additional security check needed"
+    elif license_info and license_info.ltype == LicenseType.PROPRIETARY:
+        return "Additional compliance check needed"
+    else:
+        return "Likely safe."

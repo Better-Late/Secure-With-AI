@@ -326,12 +326,15 @@ def render_sidebar():
 def render_results(i: int, stored_company: str, stored_product: str, stored_hash: str, result: Dict):
     """Render the results section for a search field."""
     hash_display = f" (Hash: {stored_hash[:16]}...)" if stored_hash else ""
+    trust_summary = result.get('trust_summary', '')
+    trust_summary_display = f" - <strong style='color: #ffffff; font-weight: 900; font-size: 1.1rem;'>{trust_summary}</strong>" if trust_summary else ""
+    
     st.markdown(f"""
     <div style="padding: 1rem; border-radius: 12px; margin: 1rem 0; 
                 border: 1px solid #3a3a4e;">
         <p style="color: #a0a0b0; margin: 0; font-size: 0.9rem;">
             <strong style="color: #8b5cf6;">Results for:</strong> 
-            <em style="color: #d0d0d0;">{stored_company} - {stored_product}{hash_display}</em>
+            <em style="color: #d0d0d0;">{stored_company} - {stored_product}{hash_display}</em>{trust_summary_display}
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -422,7 +425,7 @@ def render_search_field(i: int):
         # Perform analysis when button is clicked
         if analyze_clicked and (company_name.strip() or product_name.strip() or hash_value.strip()):
             print(f'Analysis started for: {company_name} - {product_name} - {hash_value}')
-            with st.spinner(f"Analyzing '{company_name} - {product_name}'..."):
+            with st.spinner(f"Analyzing '{company_name} - {product_name}'. It may take a minute..."):
                 # Call your security analysis function here
                 result = asyncio.run(analysis(company_name, product_name, hash_value))
                 st.session_state.search_results[i] = {
