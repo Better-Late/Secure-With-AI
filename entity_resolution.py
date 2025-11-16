@@ -114,11 +114,23 @@ async def call_gemini_api(api_key, user_query) -> tuple[SoftwareEntity | None, ]
 
         # Perform malware detection check
         malware_check_prompt = (
-            f"Is '{entity.full_name}' malware or malicious software? "
-            "Be reasonably conservative in your assessment - only flag as malware if you find "
-            "MULTIPLE EXPLICIT mentions from reliable sources stating that this software is malicious, "
-            "a virus, trojan, spyware, or known malware. Do not flag software that is merely insecure, "
-            "deprecated, or has vulnerabilities. Provide a detailed explanation of your findings. "
+            f"Is '{entity.full_name}' actual malware or malicious software? "
+            "IMPORTANT: Only flag software as malware if you find MULTIPLE EXPLICIT mentions "
+            "confirming that this specific software is:\n"
+            "- A virus, trojan, worm, ransomware, or other destructive malware\n"
+            "- Distributed with malicious intent to harm users or systems\n"
+            "- Confirmed as a threat by security researchers or reliable sources\n\n"
+            "DO NOT flag software as malware if:\n"
+            "- It's legitimate software from a known vendor (even if it has privacy concerns)\n"
+            "- It collects telemetry, analytics, or user data for advertising (common in commercial software)\n"
+            "- It has security vulnerabilities or is outdated\n"
+            "- Critics label it 'spyware' due to data collection practices, but it's made by a reputable company\n"
+            "- It's open source or from a well-known organization (Google, Microsoft, Mozilla, etc.)\n\n"
+            "Examples of LEGITIMATE software that should NOT be flagged: Google Chrome, Microsoft Edge, "
+            "Windows 10, Facebook, TikTok, Adobe Reader (even if they have privacy concerns).\n\n"
+            "Examples that SHOULD be flagged: CryptoLocker ransomware, Zeus trojan, WannaCry, "
+            "known keyloggers, confirmed backdoors.\n\n"
+            "Provide a detailed explanation of your findings. "
             "Return your response as a JSON object with exactly two fields: "
             "'is_malware' (boolean) and 'explanation' (string). Do not include any other text."
         )
