@@ -42,11 +42,12 @@ def call_gemini_api(api_key, user_query) -> tuple[SoftwareEntity | None, ]:
         " final answer. Instead, produce exactly one JSON object"
         " containing the fields: full_name, vendor, website, github_link, description, software_type."
         " If a value is unknown, use null. Use the process name as full name if full_name is unknown."
-        " For software_type, classify the software (e.g., File sharing, GenAI tool, SaaS CRM, Endpoint agent), put Software if unknown."
         " Do not include explanatory text or markdown."
         " In addition, if you find clear indications that the software is very suspicious or a malware,"
         " include a field 'malware_suspicion' with subfields 'flagged' (boolean) and 'reasons' (list of strings) explaining why." \
-        " Use this field only if the program is a known malware, not when it is just insecure."
+        " Use this field only if the program is a known malware, not when it is just insecure. " \
+        " For software_type, classify the software (e.g., File sharing, GenAI tool, SaaS CRM, Endpoint agent), put Software if unknown." \
+        " The software_type must be chosen from the following list: " + ", ".join(software_types()) + "."
     )
     full_prompt = system_prompt + "\n\n" + user_query
 
@@ -103,5 +104,50 @@ def detect_entity(text: str) -> SoftwareEntity | None:
     user_query = f"Extract software entity information from the following text: {text}"
     return call_gemini_api(api_key, user_query)
 
+def software_types():
+    return [
+        "Operating System",
+        "Database Management System (DBMS)",
+        "Web Browser",
+        "Email Client",
+        "Office Productivity Suite",
+        "Enterprise Resource Planning (ERP)",
+        "Business Intelligence (BI) Tool",
+        "Virtual Private Network (VPN)",
+        "Firewall",
+        "Antivirus Software",
+        "Backup and Recovery Software",
+        "Integrated Development Environment (IDE)",
+        "Version Control System",
+        "Content Management System (CMS)",
+        "E-commerce Platform",
+        "Payment Gateway",
+        "Project Management Software",
+        "Collaboration Tool",
+        "Video Conferencing Software",
+        "Streaming Service",
+        "Social Media Platform",
+        "Utility Software",
+        "Middleware",
+        "Firmware",
+        "Hypervisor",
+        "Containerization Platform",
+        "Monitoring Software",
+        "Help Desk Software",
+        "Learning Management System (LMS)",
+        "CAD Software",
+        "Graphic Design Software",
+        "Video Editing Software",
+        "Cloud Storage Service",
+        "Identity and Access Management (IAM)",
+        "Data Loss Prevention (DLP) Software",
+        "Security Information and Event Management (SIEM)",
+        "Infrastructure as a Service (IaaS)",
+        "Platform as a Service (PaaS)",
+        "Marketing Automation Platform",
+        "Customer Data Platform (CDP)",
+        "Supply Chain Management (SCM) Software",
+        "Geographic Information System (GIS) Software"
+    ]
 if __name__ == "__main__":
     print(detect_entity(input('Enter software name/vendor/process name: ')))
