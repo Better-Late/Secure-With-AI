@@ -23,7 +23,8 @@ class AnalysisResult(Dict[str, any]):
 def calculate_security_score(
     product_name: str,
     vulnerabilities: Optional[VulnerabilitySearchResult] = None,
-    hash_value: Optional[str] = None
+    hash_value: Optional[str] = None,
+    isGdprFined = False
 ) -> float:
     """
     Calculate overall security score based on:
@@ -39,6 +40,8 @@ def calculate_security_score(
     Returns:
         Overall security score (0-100)
     """
+    gdpr_penalty = 10 if isGdprFined else 0
+    
     # Get popularity score
     try:
         popularity_score = getPopularity(product_name)
@@ -84,7 +87,7 @@ def calculate_security_score(
         # No hash provided, use reputation score only
         final_score = reputation_score
     
-    return round(max(0.0, min(100.0, final_score)), 2)
+    return round(max(0.0, min(100.0, final_score)), 2) - gdpr_penalty
 
 
 # Global cache instance using diskcache
@@ -122,6 +125,9 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
         return result
 
     hash_info = f"\n**Hash:** `{hash_value}`" if hash_value else ""
+    
+    #GDPR
+    gdpr_section, isFined = create_gdpr_fines(product_entity.vendor)
 
     vt_section = ""
     if product_entity.malware_suspicion and product_entity.malware_suspicion.flagged:
@@ -162,14 +168,13 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
         calculated_score = calculate_security_score(
             product_name=product_entity.full_name,
             vulnerabilities=vulnerabilities,
-            hash_value=hash_value
+            hash_value=hash_value,
+            isGdprFined=isFined
         )
     
 
 
 
-    #GDPR
-    gdpr_section = create_gdpr_fines(product_entity.vendor)
 
     result = {
         'score': calculated_score,
@@ -356,7 +361,7 @@ Please try again with corrected information or contact support for manual analys
 
 
 
-def create_gdpr_fines(company_name: str) -> str:
+def create_gdpr_fines(company_name: str):
     """
     Create a markdown section summarizing GDPR fines against a company.
     Uses the results returned by gdpr_search().
@@ -373,10 +378,10 @@ def create_gdpr_fines(company_name: str) -> str:
     try:
         df = gdpr_search(company_name)
     except Exception as e:
-        return f"#### GDPR Fines\n\nCould not retrieve GDPR data: {e}"
+        return f"#### GDPR Fines\n\nCould not retrieve GDPR data: {e}", False
 
     if df is None or df.empty:
-        return "#### GDPR Fines\n\nNo GDPR enforcement actions found for this company."
+        return "#### GDPR Fines\n\nNo GDPR enforcement actions found for this company.", False
 
     required_columns = [
         "ETid", "Country", "Date of Decision", "Fine [€]",
@@ -384,7 +389,7 @@ def create_gdpr_fines(company_name: str) -> str:
     ]
     for col in required_columns:
         if col not in df.columns:
-            return f"#### GDPR Fines\n\nGDPR data missing required column: `{col}`."
+            return f"#### GDPR Fines\n\nGDPR data missing required column: `{col}`.", False
 
     md = "#### GDPR Enforcement Actions\n\n"
     md += f"Found **{len(df)}** GDPR enforcement case(s) matching **{company_name}**.\n\n"
@@ -413,7 +418,7 @@ def create_gdpr_fines(company_name: str) -> str:
             f"{ptype} | {article} | [Link]({url_final}) |\n"
         )
 
-    return md
+    return md, True
 
 
     

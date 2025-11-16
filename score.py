@@ -114,8 +114,11 @@ def getReputationScore(
 
 
 
-def combine_scores(reputationScore, cve_score): # add other scores
-  return 0.7*cve_score + 0.3*reputationScore #adjust weights
+
+
+def combine_scores(reputationScore, cve_score, gdpr_fine=False): # add other scores
+  score = 0.7*cve_score + 0.3*reputationScore #adjust weights 
+  return score if not gdpr_fine else score - 10
 
 
 if __name__ == "__main__":
