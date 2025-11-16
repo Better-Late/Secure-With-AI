@@ -1,0 +1,3 @@
+[server]
+enableCORS = false #Important to enable websocket connections with proxies
+enableXsrfProtection = false
