@@ -1,3 +1,6 @@
 [server]
 enableCORS = false #Important to enable websocket connections with proxies
 enableXsrfProtection = false
+
+[client]
+primaryColor = "#8b5cf6"

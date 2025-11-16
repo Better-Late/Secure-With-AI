@@ -10,7 +10,7 @@ if 'search_results' not in st.session_state:
     st.session_state.search_results = {}
 
 if 'num_fields' not in st.session_state:
-    st.session_state.num_fields = 3
+    st.session_state.num_fields = 1
 
 if 'field_data' not in st.session_state:
     st.session_state.field_data = {}
@@ -46,24 +46,279 @@ def parse_csv(uploaded_file) -> List[Dict[str, str]]:
 def get_score_color(score: int) -> str:
     """Return color based on security score."""
     if score >= 80:
-        return "green"
+        return "#10b981"  # Green
     elif score >= 50:
-        return "orange"
+        return "#f59e0b"  # Orange
     else:
-        return "red"
+        return "#ef4444"  # Red
+
+
+def apply_custom_css():
+    """Apply custom CSS for Obsidian-inspired styling."""
+    st.markdown("""
+    <style>
+        /* Support both light and dark themes */
+        :root {
+            color-scheme: light dark;
+        }
+        
+        /* Main background - dark mode */
+        [data-testid="stAppViewContainer"][data-theme="dark"] .main,
+        .main {
+            background: #1a1a2e !important;
+        }
+        
+        /* Main background - light mode */
+        [data-testid="stAppViewContainer"][data-theme="light"] .main {
+            background: #f5f5f5 !important;
+        }
+        
+        /* Sidebar styling - dark mode */
+        [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"],
+        [data-testid="stSidebar"] {
+            background: #1e1e1e !important;
+        }
+        
+        /* Sidebar styling - light mode */
+        [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] {
+            background: #ffffff !important;
+            border-right: 1px solid #e0e0e0 !important;
+        }
+        
+        /* Sidebar text - dark mode */
+        [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"] .element-container,
+        [data-testid="stSidebar"] .element-container {
+            color: #dcddde !important;
+        }
+        
+        /* Sidebar text - light mode */
+        [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] .element-container {
+            color: #2d2d2d !important;
+        }
+        
+        /* Sidebar headers - dark mode */
+        [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"] h1, 
+        [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"] h2, 
+        [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stSidebar"] h3,
+        [data-testid="stSidebar"] h1, 
+        [data-testid="stSidebar"] h2, 
+        [data-testid="stSidebar"] h3 {
+            color: #8b8b8b !important;
+        }
+        
+        /* Sidebar headers - light mode */
+        [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] h1,
+        [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] h2,
+        [data-testid="stAppViewContainer"][data-theme="light"] [data-testid="stSidebar"] h3 {
+            color: #5a5a5a !important;
+        }
+        
+        /* Headers - all modes */
+        h1, h2, h3 {
+            color: #8b5cf6 !important;
+            font-weight: 700;
+        }
+        
+        /* Input fields - styling only */
+        .stTextInput input {
+            border-radius: 8px !important;
+            transition: all 0.3s ease;
+        }
+        
+        /* Input fields focus - all modes */
+        .stTextInput input:focus {
+            border-color: #8b5cf6 !important;
+            box-shadow: 0 0 0 1px #8b5cf6 !important;
+        }
+        
+        /* Buttons - all modes */
+        .stButton button {
+            border-radius: 8px !important;
+            font-weight: 600 !important;
+            transition: all 0.3s ease !important;
+            border: none !important;
+        }
+        
+        .stButton button[kind="primary"] {
+            background: #8b5cf6 !important;
+            color: white !important;
+        }
+        
+        .stButton button[kind="primary"]:hover {
+            background: #7c3aed !important;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4) !important;
+        }
+        
+        /* Secondary buttons - dark mode */
+        [data-testid="stAppViewContainer"][data-theme="dark"] .stButton button[kind="secondary"],
+        .stButton button[kind="secondary"] {
+            background: #2d2d3a !important;
+            color: #e0e0e0 !important;
+        }
+        
+        /* Secondary buttons - light mode */
+        [data-testid="stAppViewContainer"][data-theme="light"] .stButton button[kind="secondary"] {
+            background: #e0e0e0 !important;
+            color: #2d2d2d !important;
+        }
+        
+        /* Secondary buttons hover - dark mode */
+        [data-testid="stAppViewContainer"][data-theme="dark"] .stButton button[kind="secondary"]:hover,
+        .stButton button[kind="secondary"]:hover {
+            background: #3a3a4e !important;
+            transform: translateY(-2px);
+        }
+        
+        /* Secondary buttons hover - light mode */
+        [data-testid="stAppViewContainer"][data-theme="light"] .stButton button[kind="secondary"]:hover {
+            background: #d0d0d0 !important;
+            transform: translateY(-2px);
+        }
+        
+        /* Expander - dark mode */
+        [data-testid="stAppViewContainer"][data-theme="dark"] .streamlit-expanderHeader,
+        .streamlit-expanderHeader {
+            background-color: #1e1e2e !important;
+            border-radius: 8px !important;
+            border: 1px solid #3a3a4e !important;
+            color: #e0e0e0 !important;
+        }
+        
+        /* Expander - light mode */
+        [data-testid="stAppViewContainer"][data-theme="light"] .streamlit-expanderHeader {
+            background-color: #ffffff !important;
+            border: 1px solid #d0d0d0 !important;
+            color: #2d2d2d !important;
+        }
+        
+        /* Expander content - dark mode */
+        [data-testid="stAppViewContainer"][data-theme="dark"] .streamlit-expanderContent,
+        .streamlit-expanderContent {
+            background-color: #1a1a2e !important;
+            border: 1px solid #3a3a4e !important;
+            border-top: none !important;
+        }
+        
+        /* Expander content - light mode */
+        [data-testid="stAppViewContainer"][data-theme="light"] .streamlit-expanderContent {
+            background-color: #fafafa !important;
+            border: 1px solid #d0d0d0 !important;
+            border-top: none !important;
+        }
+        
+        /* File uploader - dark mode */
+        [data-testid="stAppViewContainer"][data-theme="dark"] [data-testid="stFileUploader"],
+        [data-testid="stFileUploader"] {
+            background-color: #2a2a2a !important;
+            border-radius: 8px;
+            border: 1px dashed #4a4a4a !important;
+            padding: 1rem;
+        }
+        
+        
+        /* Dividers - dark mode */
+        [data-testid="stAppViewContainer"][data-theme="dark"] hr,
+        hr {
+            border-color: #3a3a4e !important;
+        }
+        
+        /* Dividers - light mode */
+        [data-testid="stAppViewContainer"][data-theme="light"] hr {
+            border-color: #d0d0d0 !important;
+        }
+        
+        /* Score card enhancement */
+        .score-card {
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease;
+        }
+        
+        .score-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+        }
+        
+        /* Markdown containers - dark mode */
+        [data-testid="stAppViewContainer"][data-theme="dark"] .element-container,
+        .element-container {
+            color: #d0d0d0 !important;
+        }
+        
+        /* Markdown containers - light mode */
+        [data-testid="stAppViewContainer"][data-theme="light"] .element-container {
+            color: #2d2d2d !important;
+        }
+        
+        /* Success/Warning/Error messages */
+        .stSuccess, .stWarning, .stError {
+            border-radius: 8px !important;
+        }
+        
+        /* Tables - dark mode */
+        [data-testid="stAppViewContainer"][data-theme="dark"] table,
+        table {
+            background-color: #1e1e2e !important;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        /* Tables - light mode */
+        [data-testid="stAppViewContainer"][data-theme="light"] table {
+            background-color: #ffffff !important;
+        }
+        
+        /* Table headers - all modes */
+        th {
+            background: #8b5cf6 !important;
+            color: white !important;
+        }
+        
+        /* Table cells - dark mode */
+        [data-testid="stAppViewContainer"][data-theme="dark"] td,
+        td {
+            color: #d0d0d0 !important;
+            border-color: #3a3a4e !important;
+        }
+        
+        /* Table cells - light mode */
+        [data-testid="stAppViewContainer"][data-theme="light"] td {
+            color: #2d2d2d !important;
+            border-color: #d0d0d0 !important;
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
 
 def render_header():
     """Render the page header and title."""
-    st.title("🔒 Security Analysis Tool")
-    st.markdown("Enter company and program details to analyze and click **Analyze** to get security summaries.")
+    st.markdown("""
+    <div style="text-align: center; padding: 2rem 0;">
+        <h1 style="font-size: 3.5rem; margin-bottom: 0.5rem; color: #8b5cf6;">
+            Secure with AI
+        </h1>
+        <p style="font-size: 1.2rem; color: #a0a0b0; margin-top: 0;">
+            Comprehensive security analysis powered by artificial intelligence
+        </p>
+        <p style="font-size: 0.95rem; color: #808090; max-width: 600px; margin: 1rem auto;">
+            Enter company and product details to analyze and click <strong>Analyze</strong> to get security summaries
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 def render_analyze_all_button():
     """Render the Analyze All button and handle its logic."""
+    # Only show if there are more than 2 rows
+    if st.session_state.num_fields <= 2:
+        return
+    
     col_left, col_center, col_right = st.columns([2, 1, 2])
     with col_center:
-        if st.button("🔍 Analyze All", use_container_width=True, type="primary"):
+        if st.button("Analyze All", use_container_width=True, type="primary"):
             # Collect all fields that have data
             tasks_to_run = []
             for i in range(st.session_state.num_fields):
@@ -114,49 +369,88 @@ def score_dialog():
 def render_sidebar():
     """Render the sidebar with settings and controls."""
     with st.sidebar:
-        st.header("Settings")
+        st.markdown("""
+        <h2 style="color: #8b8b8b; margin-bottom: 1.5rem; font-size: 1.3rem;">
+            Settings
+        </h2>
+        """, unsafe_allow_html=True)
         
         # CSV Upload
-        st.subheader("📁 Upload CSV")
+        st.markdown("""
+        <div style="background: #2a2a2a; 
+                    padding: 1rem; border-radius: 8px; margin-bottom: 1rem; 
+                    border: 1px solid #3a3a3a;">
+            <p style="color: #8b8b8b; font-weight: 600; margin-bottom: 0.5rem; font-size: 0.95rem;">Upload CSV</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
         uploaded_file = st.file_uploader(
-            "Upload a CSV file with company, product, and hash data",
+            "Upload CSV file",
             type=['csv'],
-            help="CSV should have columns: company_name, product_name, hash"
+            help="CSV should have columns: company_name, product_name, hash",
+            label_visibility="collapsed"
         )
         
         if uploaded_file is not None:
-            if st.button("Load CSV Data", type="primary"):
+            if st.button("Load CSV Data", type="primary", use_container_width=True):
                 entries = parse_csv(uploaded_file)
                 if entries:
                     st.session_state.num_fields = len(entries)
                     st.session_state.field_data = {i: entry for i, entry in enumerate(entries)}
                     st.session_state.search_results = {}  # Clear previous results
-                    st.success(f"Loaded {len(entries)} entries from CSV!")
+                    st.success(f"Loaded {len(entries)} entries!")
                     st.rerun()
                 else:
-                    st.warning("No valid entries found in CSV")
+                    st.warning("No valid entries found")
         
-        st.divider()
+        st.markdown("<div style='margin: 1.5rem 0; height: 1px; background: #3a3a3a;'></div>", unsafe_allow_html=True)
         
-        if st.button("Clear All Results", type="secondary"):
+        if st.button("Clear All Results", type="secondary", use_container_width=True):
             st.session_state.search_results = {}
             st.rerun()
         
-        st.divider()
+        st.markdown("<div style='margin: 1.5rem 0; height: 1px; background: #3a3a3a;'></div>", unsafe_allow_html=True)
+        
         st.markdown("""
-        ### How to use
-        1. **Option A**: Enter company, product names, and hash manually
-        2. **Option B**: Upload a CSV file with columns: `company_name`, `product_name`, `hash`
-        3. Click **Analyze All** to analyze all entries at once, or click individual Analyze buttons
-        4. View the security score and summary
-        5. Click the + button to add more fields
-        """)
+        <div style="background: #2a2a2a; 
+                    padding: 1.2rem; border-radius: 8px; border: 1px solid #3a3a3a;">
+            <p style="color: #8b8b8b; font-weight: 600; margin-bottom: 1rem; font-size: 1.05rem;">
+                How to Use
+            </p>
+            <div style="color: #a0a0a0; font-size: 0.85rem; line-height: 1.8;">
+                <p style="margin-bottom: 0.5rem;"><strong style="color: #b0b0b0;">Option A:</strong> Manual Entry</p>
+                <p style="margin-left: 1rem; margin-top: 0.3rem; margin-bottom: 1rem;">Enter company, product names, and hash manually in the fields below.</p>   
+                <p style="margin-bottom: 0.5rem;"><strong style="color: #b0b0b0;">Option B:</strong> CSV Upload</p>
+                <p style="margin-left: 1rem; margin-top: 0.3rem; margin-bottom: 0.5rem;">Upload a CSV with columns:</p>
+                <p style="margin-left: 2rem; font-family: monospace; font-size: 0.8rem; color: #c0c0c0;">company_name, product_name, hash</p>
+                <p style="margin-top: 1rem; margin-bottom: 0.5rem;"><strong style="color: #b0b0b0;">Analysis:</strong></p>
+                <ul style="margin-left: 1.5rem; margin-top: 0.3rem; padding-left: 0.5rem;">
+                    <li>Click <strong>Analyze All</strong> for batch processing (3+ rows)</li>
+                    <li>Click individual <strong>Analyze</strong> buttons for single entries</li>
+                </ul>
+                <p style="margin-top: 1rem; margin-bottom: 0.5rem;"><strong style="color: #b0b0b0;">Tips:</strong></p>
+                <ul style="margin-left: 1.5rem; margin-top: 0.3rem; padding-left: 0.5rem;">
+                    <li>View detailed security scores and summaries</li>
+                    <li>Add more fields with the + button</li>
+                </ul>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 
 def render_results(i: int, stored_company: str, stored_product: str, stored_hash: str, result: Dict):
     """Render the results section for a search field."""
-    hash_display = f" (Hash: {stored_hash})" if stored_hash else ""
-    st.markdown(f"**Results for:** *{stored_company} - {stored_product}{hash_display}*")
+    hash_display = f" (Hash: {stored_hash[:16]}...)" if stored_hash else ""
+    st.markdown(f"""
+    <div style="background: #1e1e2e; 
+                padding: 1rem; border-radius: 12px; margin: 1rem 0; 
+                border: 1px solid #3a3a4e;">
+        <p style="color: #a0a0b0; margin: 0; font-size: 0.9rem;">
+            <strong style="color: #8b5cf6;">Results for:</strong> 
+            <em style="color: #d0d0d0;">{stored_company} - {stored_product}{hash_display}</em>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
     
     # Display security score with colored indicator
     score = result['score']
@@ -168,44 +462,40 @@ def render_results(i: int, stored_company: str, stored_product: str, stored_hash
         breakdown_items = ""
         for name, value in breakdown.items():
             breakdown_items += (
-                f"<div style='font-size: 12px; margin-top: 4px;'>"
+                f"<div style='font-size: 11px; margin-top: 6px; color: rgba(255,255,255,0.8);'>"
                 f"<strong>{name}:</strong> {value}"
                 f"</div>"
             )
 
         html = (
-            f"<div style='text-align: center; padding: 20px; "
-            f"background-color: {score_color}; border-radius: 12px; color: white;'>"
-            f"<h1 style='margin: 0; color: white;'>{score}</h1>"
-            f"<p style='margin: 0; color: white;'>Security Score</p>"
-            f"<div style='margin-top: 10px;'>{breakdown_items}</div>"
+            f"<div class='score-card' style='background: {score_color}; "
+            f"border-radius: 16px; padding: 28px; text-align: center; "
+            f"box-shadow: 0 8px 24px rgba(0,0,0,0.3);'>"
+            f"<h1 style='margin: 0; color: white; font-size: 3.5rem; font-weight: 700;'>{score}</h1>"
+            f"<p style='margin: 8px 0 0 0; color: white; font-size: 0.9rem; font-weight: 600; letter-spacing: 1px;'>SECURITY SCORE</p>"
+            f"<div style='margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.2);'>{breakdown_items}</div>"
             f"</div>"
         )
 
         st.markdown(html, unsafe_allow_html=True)
 
-        # st.markdown(f"""
-        # <div style="text-align: center; padding: 20px; background-color: {score_color}; 
-        #             border-radius: 10px; color: white;">
-        #     <h1 style="margin: 0; color: white;">{score}</h1>
-        #     <p style="margin: 0; color: white;">Security Score</p>
-        # </div>
-        # """, unsafe_allow_html=True)
-
-        if st.button("ℹ️ What does this score mean?", key=f"score_info_btn_{score}", width="stretch"):
+        if st.button("Score Details", key=f"score_info_btn_{i}", use_container_width=True):
             score_dialog()
 
     with col_summary:
         # Display summary in an expander
-        with st.expander("📋 View Full Summary", expanded=True):
+        with st.expander("View Full Summary", expanded=True):
             st.markdown(result['summary'], unsafe_allow_html=True)
 
 
 def render_search_field(i: int):
     """Render a single search field with input boxes and analyze button."""
     with st.container():
-        # Compact separator instead of full divider
-        st.markdown(f"<div style='margin: 5px 0; border-bottom: 1px solid #ddd;'></div>", unsafe_allow_html=True)
+        # Modern separator
+        st.markdown(f"""
+        <div style='margin: 20px 0; height: 1px; background: #3a3a4e;'>
+        </div>
+        """, unsafe_allow_html=True)
         
         # Get pre-populated data if it exists
         company_default = st.session_state.field_data.get(i, {}).get('company_name', '')
@@ -216,31 +506,34 @@ def render_search_field(i: int):
         
         with col1:
             company_name = st.text_input(
-                f"Company Name {i+1}",
+                f"Company Name",
                 key=f"company_{i}",
                 value=company_default,
-                placeholder="Enter company name..."
+                placeholder="Enter company name...",
+                label_visibility="visible"
             )
         
         with col2:
             product_name = st.text_input(
-                f"Product Name {i+1}",
+                f"Product Name",
                 key=f"product_{i}",
                 value=product_default,
-                placeholder="Enter product name..."
+                placeholder="Enter product name...",
+                label_visibility="visible"
             )
         
         with col3:
             hash_value = st.text_input(
-                f"Hash {i+1}",
+                f"Hash",
                 key=f"hash_{i}",
                 value=hash_default,
-                placeholder="Enter hash..."
+                placeholder="Enter hash (optional)...",
+                label_visibility="visible"
             )
         
         with col4:
-            st.markdown("<br>", unsafe_allow_html=True)  # Align button with input
-            analyze_clicked = st.button("🔍 Analyze", key=f"analyze_{i}")
+            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)  # Align button with input
+            analyze_clicked = st.button("Analyze", key=f"analyze_{i}", type="primary", use_container_width=True)
         
         # Perform analysis when button is clicked
         if analyze_clicked and (company_name.strip() or product_name.strip() or hash_value.strip()):
@@ -272,20 +565,27 @@ def render_search_fields():
 
 def render_add_field_button():
     """Render the add field button at the bottom."""
-    st.markdown("---")  # Compact separator
+    st.markdown("""
+    <div style='margin: 30px 0; height: 1px; background: #3a3a4e;'>
+    </div>
+    """, unsafe_allow_html=True)    
     col1, col2, col3 = st.columns([2, 1, 2])
     with col2:
-        if st.button("➕ Search More", use_container_width=True, type="secondary"):
+        if st.button("Add More Fields", use_container_width=True, type="secondary"):
             st.session_state.num_fields += 1
             st.rerun()
 
 
 def main():
     st.set_page_config(
-        page_title="Security Analysis Tool",
+        page_title="Secure with AI",
         page_icon="🔒",
-        layout="wide"
+        layout="wide",
+        initial_sidebar_state="expanded"
     )
+    
+    # Apply custom styling
+    apply_custom_css()
     
     render_header()
     render_analyze_all_button()

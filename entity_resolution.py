@@ -42,7 +42,7 @@ def call_gemini_api(api_key, user_query) -> tuple[SoftwareEntity | None, ]:
         " final answer. Instead, produce exactly one JSON object"
         " containing the fields: full_name, vendor, website, github_link, description, software_type."
         " If a value is unknown, use null. Use the process name as full name if full_name is unknown."
-        " Do not include explanatory text or markdown."
+        " Do not include explanatory text or markdown. In the description, do NOT mention pricing and licensing."
         " In addition, if you find clear indications that the software is very suspicious or a malware,"
         " include a field 'malware_suspicion' with subfields 'flagged' (boolean) and 'reasons' (list of strings) explaining why." \
         " Use this field only if the program is a known malware, not when it is just insecure. " \
