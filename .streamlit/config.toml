@@ -1,6 +1,7 @@
 [server]
 enableCORS = false #Important to enable websocket connections with proxies
 enableXsrfProtection = false
+requestTimeout = 1000
 enableStaticServing = true
 
 [[theme.fontFaces]]
