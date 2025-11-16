@@ -556,7 +556,9 @@ def create_license_section(license: Optional[License]) -> str:
     md = "#### License Information\n\n"
     md += f"- **License Type:** {license.ltype}\n"
     md += f"- **License URL:** {license.url}\n"
-    md += f"- **Is Free Software:** {license.is_free or 'N/A'}\n"
+    # Escape dollar signs to prevent Streamlit from interpreting them as LaTeX
+    is_free_text = (license.is_free or 'N/A').replace('$', r'\$')
+    md += f"- **Is Free Software:** {is_free_text}\n"
 
     # Add sources section if available
     if license.legal_sources or license.pricing_sources:
