@@ -297,16 +297,6 @@ async def analysis(company_name: str, product_name: str, hash_value: Optional[st
 {vt_section}
 {malware_warning}
 
-#### Key Findings (Mock Data)
-- **Risk Level**: Medium
-- **Vulnerabilities Detected**: 2
-- **Compliance Status**: Partial
-
-#### Recommendations (Mock Data)
-1. Update dependencies to latest versions
-2. Review access controls
-3. Implement additional encryption
-
 {license_section}
 
 {vulnerability_section}
