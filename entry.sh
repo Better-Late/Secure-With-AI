@@ -2,7 +2,7 @@
 set -e
 
 # Fail if secrets aren't set
-if [ -z "$BASIC_AUTH_USER" ] || [ -z "$BASIC_AUTH_PASS" ] || [ -z "$GEMINI_API_KEY" || [ -z "$VIRUSTOTAL_API_KEY" ]; then
+if [ -z "$BASIC_AUTH_USER" ] || [ -z "$BASIC_AUTH_PASS" ] || [ -z "$GEMINI_API_KEY" ] || [ -z "$VIRUSTOTAL_API_KEY" ]; then
   echo "[ERROR] Missing required secrets."
   exit 1
 fi
