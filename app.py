@@ -159,12 +159,95 @@ def render_analyze_all_button():
 
 @st.dialog("Score Calculation")
 def score_dialog():
-    st.markdown("""
-    ## 📘 Formulas
+    st.markdown(r"""
+# 🔒 Trust Score Calculation 
 
-    - Add any detailed documentation here  
-    - kadnjasda
-    """)
+Our **Trust Score** summarizes several security and reputation signals into a single value between **0 and 100**. Below is how each component works, written in a clear and human-readable format.
+
+---
+
+## 📈 1. Popularity Score (Google Trends)
+
+* We pull **12 months of Google Trends data** to measure public interest.
+* This value is **multiplied by 1.5** to emphasize recent popularity and capped at **100**.
+* Why it matters:
+  Higher interest → more community attention → usually better security practices.
+
+---
+
+## 🛡️ 2. CVE / Vulnerability Score
+
+We look at known CVEs and their CVSS severity ratings. Each CVE gets a multiplier depending on its status:
+
+* **Unsolved CVEs:** × **1.5** penalty  
+* **Unknown status:** × **1.2** penalty  
+* **Solved CVEs:** × **1.0** (no penalty)
+
+The combined risk total is then converted into a score:
+
+$$
+\text{CVE Score} = \left(1 - \frac{\text{total\_risk}}{\text{total\_risk} + 40}\right) \times 100
+$$
+
+This method prevents the score from tanking too quickly and ensures that **0 CVEs = perfect 100**.
+
+---
+
+## ⚖️ 3. Reputation Score (Popularity + CVE)
+
+We blend the two earlier scores:
+
+* **66.7%** Popularity  
+* **33.3%** CVE Score  
+
+This weighting reflects that **community scrutiny matters more than raw vulnerability count**.
+
+---
+
+## 🧪 4. VirusTotal Score (only if a file hash is provided)
+
+If the user provides a hash, we check it across 90+ antivirus engines.
+
+The score is:
+
+$$
+\text{VirusTotal Score} = \left(1 - \frac{\text{malicious} + \text{suspicious}}{\text{total\_scans}}\right) \times 100
+$$
+
+* This directly measures malware detection rates.
+* If the file is flagged as malware, we **skip all calculations** and immediately return a **10/100** to indicate severe risk.
+
+---
+
+## 🧮 5. Final Score Calculation
+
+* **Without a file hash:**  
+  Final Score = **Reputation Score**
+
+* **With a file hash:**  
+  Final Score = **50% Reputation + 50% VirusTotal**
+
+* **GDPR Penalty:**  
+  Up to **10 points** may be subtracted if the company has recorded enforcement actions in the GDPR Enforcement Tracker.
+
+Finally:
+
+* The score is **clamped between 0 and 100**  
+* Rounded to **two decimals**  
+* Returned with a **detailed breakdown** of all components
+
+---
+
+## ⚠️ 6. Special Case: Malware-Flagged Software
+
+If VirusTotal marks the file as malware:
+
+* Final Score = **10/100**
+* No other calculations are performed
+
+---
+"""
+)
 
 
 def render_sidebar():
